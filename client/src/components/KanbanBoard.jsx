@@ -3,7 +3,7 @@ import { kanban } from '../api'
 
 const COLUMNS = [
   { id: 'backlog', label: 'Backlog', color: 'border-gray-600' },
-  { id: 'in_progress', label: 'In Progress', color: 'border-yellow-500' },
+  { id: 'in-progress', label: 'In Progress', color: 'border-yellow-500' },
   { id: 'done', label: 'Done', color: 'border-emerald-500' },
 ]
 
