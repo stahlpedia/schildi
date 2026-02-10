@@ -44,6 +44,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     has_unanswered INTEGER DEFAULT 0,
+    agent_unread INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -57,6 +58,13 @@ db.exec(`
     FOREIGN KEY (conversation_id) REFERENCES conversations(id)
   );
 `);
+
+// Migrate: add agent_unread column if missing
+try {
+  db.prepare('SELECT agent_unread FROM conversations LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE conversations ADD COLUMN agent_unread INTEGER DEFAULT 0');
+}
 
 // Seed default columns if empty
 const colCount = db.prepare('SELECT COUNT(*) as c FROM columns').get();

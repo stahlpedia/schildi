@@ -38,10 +38,12 @@ router.post('/conversations/:id/messages', (req, res) => {
 
   const result = db.prepare('INSERT INTO messages (conversation_id, author, text, task_ref) VALUES (?, ?, ?, ?)').run(req.params.id, author, text, task_ref || null);
 
-  // Update has_unanswered: agent writes → human needs to see it (1)
-  // Human reading is handled by GET /messages (sets to 0)
+  // Agent writes → human needs to see it (has_unanswered=1)
+  // Human writes → agent needs to see it (agent_unread=1)
   if (author === 'agent') {
     db.prepare('UPDATE conversations SET has_unanswered = 1 WHERE id = ?').run(req.params.id);
+  } else if (author === 'user') {
+    db.prepare('UPDATE conversations SET agent_unread = 1 WHERE id = ?').run(req.params.id);
   }
 
   const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
@@ -52,6 +54,21 @@ router.post('/conversations/:id/messages', (req, res) => {
 router.get('/unanswered', (req, res) => {
   const convos = db.prepare('SELECT c.*, (SELECT text FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message FROM conversations c WHERE c.has_unanswered = 1 ORDER BY c.created_at DESC').all();
   res.json(convos);
+});
+
+// Get conversations with unread human messages (for agent)
+router.get('/agent-unread', (req, res) => {
+  const convos = db.prepare(`
+    SELECT c.*, (SELECT text FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message
+    FROM conversations c WHERE c.agent_unread = 1 ORDER BY c.created_at DESC
+  `).all();
+  res.json(convos);
+});
+
+// Mark conversation as read by agent
+router.post('/conversations/:id/agent-read', (req, res) => {
+  db.prepare('UPDATE conversations SET agent_unread = 0 WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
 });
 
 // Delete conversation

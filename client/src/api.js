@@ -68,4 +68,6 @@ export const channel = {
   sendMessage: (convoId, author, text, task_ref) => api(`/channel/conversations/${convoId}/messages`, { method: 'POST', body: JSON.stringify({ author, text, task_ref }) }),
   unanswered: () => api('/channel/unanswered'),
   deleteConversation: (id) => api(`/channel/conversations/${id}`, { method: 'DELETE' }),
+  agentUnread: () => api('/channel/agent-unread'),
+  markAgentRead: (convoId) => api(`/channel/conversations/${convoId}/agent-read`, { method: 'POST' }),
 };
