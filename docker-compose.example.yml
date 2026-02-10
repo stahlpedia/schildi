@@ -1,0 +1,14 @@
+services:
+  dashboard:
+    build: .
+    ports:
+      - "3333:3333"
+    environment:
+      - PORT=3333
+      - DASHBOARD_PASSWORD=changeme
+      - JWT_SECRET=change-this-to-a-random-string
+      - WORKSPACE_PATH=/workspace
+    volumes:
+      - ./data:/app/data
+      - /home/node/.openclaw/workspace:/workspace:ro
+    restart: unless-stopped
