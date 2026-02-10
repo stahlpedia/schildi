@@ -4,8 +4,9 @@ import Login from './components/Login'
 import KanbanBoard from './components/KanbanBoard'
 import MemoryViewer from './components/MemoryViewer'
 import Logbuch from './components/Logbuch'
+import Channel from './components/Channel'
 
-const TABS = ['Kanban', 'Memory', 'Logbuch']
+const TABS = ['Kanban', 'Memory', 'Channel']
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn())
@@ -37,6 +38,7 @@ export default function App() {
         {tab === 'Kanban' && <KanbanBoard />}
         {tab === 'Memory' && <MemoryViewer />}
         {tab === 'Logbuch' && <Logbuch />}
+        {tab === 'Channel' && <Channel />}
       </main>
     </div>
   )

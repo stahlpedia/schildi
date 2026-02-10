@@ -39,6 +39,23 @@ db.exec(`
     category TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    has_unanswered INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    author TEXT NOT NULL CHECK(author IN ('user', 'agent')),
+    text TEXT NOT NULL,
+    task_ref INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+  );
 `);
 
 // Seed default columns if empty

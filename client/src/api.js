@@ -60,3 +60,12 @@ export const log = {
   create: (message, category = '') => api('/log/entries', { method: 'POST', body: JSON.stringify({ message, category }) }),
   remove: (id) => api(`/log/entries/${id}`, { method: 'DELETE' }),
 };
+
+export const channel = {
+  conversations: () => api('/channel/conversations'),
+  createConversation: (title, author) => api('/channel/conversations', { method: 'POST', body: JSON.stringify({ title, author }) }),
+  messages: (convoId) => api(`/channel/conversations/${convoId}/messages`),
+  sendMessage: (convoId, author, text, task_ref) => api(`/channel/conversations/${convoId}/messages`, { method: 'POST', body: JSON.stringify({ author, text, task_ref }) }),
+  unanswered: () => api('/channel/unanswered'),
+  deleteConversation: (id) => api(`/channel/conversations/${id}`, { method: 'DELETE' }),
+};
