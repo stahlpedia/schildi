@@ -28,6 +28,8 @@ app.use('/api/log', require('./routes/log'));
 // Serve frontend in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDist));
+
+// Catch-all for frontend routing (MUST be last!)
 app.get('*', (req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
