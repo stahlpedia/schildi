@@ -38,11 +38,10 @@ router.post('/conversations/:id/messages', (req, res) => {
 
   const result = db.prepare('INSERT INTO messages (conversation_id, author, text, task_ref) VALUES (?, ?, ?, ?)').run(req.params.id, author, text, task_ref || null);
 
-  // Update has_unanswered
-  if (author === 'user') {
+  // Update has_unanswered: agent writes → human needs to see it (1)
+  // Human reading is handled by GET /messages (sets to 0)
+  if (author === 'agent') {
     db.prepare('UPDATE conversations SET has_unanswered = 1 WHERE id = ?').run(req.params.id);
-  } else {
-    db.prepare('UPDATE conversations SET has_unanswered = 0 WHERE id = ?').run(req.params.id);
   }
 
   const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
