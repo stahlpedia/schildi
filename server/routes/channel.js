@@ -16,14 +16,17 @@ router.post('/conversations', (req, res) => {
   const { title, author = 'user' } = req.body;
   const now = new Date().toISOString().replace('T', ' ').slice(0, 16);
   const fullTitle = title ? `${now} — ${title}` : now;
-  const result = db.prepare('INSERT INTO conversations (title, has_unanswered) VALUES (?, ?)').run(fullTitle, author === 'user' ? 1 : 0);
+  // Agent-created conversations are also "unanswered" (human hasn't seen them yet)
+  const result = db.prepare('INSERT INTO conversations (title, has_unanswered) VALUES (?, ?)').run(fullTitle, 1);
   const convo = db.prepare('SELECT * FROM conversations WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(convo);
 });
 
-// Get messages for a conversation
+// Get messages for a conversation (marks as read)
 router.get('/conversations/:id/messages', (req, res) => {
   const msgs = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC').all(req.params.id);
+  // Mark as read when human opens the conversation
+  db.prepare('UPDATE conversations SET has_unanswered = 0 WHERE id = ?').run(req.params.id);
   res.json(msgs);
 });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { channel } from '../api'
 
-export default function Channel() {
+export default function Channel({ onUpdate }) {
   const [convos, setConvos] = useState([])
   const [selected, setSelected] = useState(null)
   const [messages, setMessages] = useState([])
@@ -41,6 +41,7 @@ export default function Channel() {
     setTaskRef('')
     loadMessages(selected)
     loadConvos()
+    onUpdate?.()
   }
 
   const handleDelete = async (id) => {

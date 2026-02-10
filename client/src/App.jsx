@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { isLoggedIn, login as doLogin, logout } from './api'
+import { isLoggedIn, login as doLogin, logout, channel } from './api'
 import Login from './components/Login'
 import KanbanBoard from './components/KanbanBoard'
 import MemoryViewer from './components/MemoryViewer'
@@ -11,6 +11,26 @@ const TABS = ['Kanban', 'Memory', 'Channel']
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn())
   const [tab, setTab] = useState('Kanban')
+  const [unansweredCount, setUnansweredCount] = useState(0)
+
+  const checkUnanswered = async () => {
+    try {
+      const list = await channel.unanswered()
+      setUnansweredCount(list.length)
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (!loggedIn) return
+    checkUnanswered()
+    const interval = setInterval(checkUnanswered, 15000)
+    return () => clearInterval(interval)
+  }, [loggedIn])
+
+  // Also refresh when switching to Channel tab
+  useEffect(() => {
+    if (tab === 'Channel') checkUnanswered()
+  }, [tab])
 
   if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />
 
@@ -25,9 +45,16 @@ export default function App() {
           <nav className="flex gap-1">
             {TABS.map(t => (
               <button key={t} onClick={() => setTab(t)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   tab === t ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                }`}>{t}</button>
+                }`}>
+                {t}
+                {t === 'Channel' && unansweredCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white">
+                    {unansweredCount}
+                  </span>
+                )}
+              </button>
             ))}
           </nav>
           <button onClick={() => { logout(); setLoggedIn(false) }}
@@ -38,7 +65,7 @@ export default function App() {
         {tab === 'Kanban' && <KanbanBoard />}
         {tab === 'Memory' && <MemoryViewer />}
         {tab === 'Logbuch' && <Logbuch />}
-        {tab === 'Channel' && <Channel />}
+        {tab === 'Channel' && <Channel onUpdate={checkUnanswered} />}
       </main>
     </div>
   )
