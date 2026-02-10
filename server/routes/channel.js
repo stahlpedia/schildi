@@ -71,6 +71,23 @@ router.post('/conversations/:id/agent-read', (req, res) => {
   res.json({ ok: true });
 });
 
+// Edit message
+router.put('/messages/:id', (req, res) => {
+  const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id);
+  if (!msg) return res.status(404).json({ error: 'Nicht gefunden' });
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'text erforderlich' });
+  db.prepare("UPDATE messages SET text = ? WHERE id = ?").run(text, req.params.id);
+  const updated = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id);
+  res.json(updated);
+});
+
+// Delete message
+router.delete('/messages/:id', (req, res) => {
+  db.prepare('DELETE FROM messages WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 // Delete conversation
 router.delete('/conversations/:id', (req, res) => {
   db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(req.params.id);

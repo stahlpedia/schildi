@@ -9,6 +9,8 @@ export default function Channel({ onUpdate }) {
   const [newTitle, setNewTitle] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [taskRef, setTaskRef] = useState('')
+  const [editMsg, setEditMsg] = useState(null)
+  const [editText, setEditText] = useState('')
   const bottomRef = useRef(null)
 
   const loadConvos = async () => {
@@ -44,10 +46,31 @@ export default function Channel({ onUpdate }) {
     onUpdate?.()
   }
 
-  const handleDelete = async (id) => {
+  const handleDeleteConvo = async (id) => {
+    if (!confirm('Unterhaltung löschen? Alle Nachrichten gehen verloren.')) return
     await channel.deleteConversation(id)
     if (selected === id) { setSelected(null); setMessages([]) }
     loadConvos()
+    onUpdate?.()
+  }
+
+  const handleEditMsg = async (msg) => {
+    setEditMsg(msg)
+    setEditText(msg.text)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editMsg || !editText.trim()) return
+    await channel.editMessage(editMsg.id, editText)
+    setEditMsg(null)
+    setEditText('')
+    loadMessages(selected)
+  }
+
+  const handleDeleteMsg = async (msgId) => {
+    if (!confirm('Nachricht löschen?')) return
+    await channel.deleteMessage(msgId)
+    loadMessages(selected)
   }
 
   return (
@@ -69,13 +92,14 @@ export default function Channel({ onUpdate }) {
         <div className="flex-1 overflow-y-auto">
           {convos.map(c => (
             <div key={c.id} onClick={() => setSelected(c.id)}
-              className={`px-3 py-2 cursor-pointer border-b border-gray-800/50 flex items-center gap-2 hover:bg-gray-800/50 transition-colors ${selected === c.id ? 'bg-gray-800' : ''}`}>
+              className={`px-3 py-2 cursor-pointer border-b border-gray-800/50 flex items-center gap-2 hover:bg-gray-800/50 transition-colors group ${selected === c.id ? 'bg-gray-800' : ''}`}>
               {c.has_unanswered === 1 && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
               <div className="flex-1 min-w-0">
                 <div className="text-xs text-white truncate">{c.title}</div>
                 <div className="text-[10px] text-gray-500">{new Date(c.created_at + 'Z').toLocaleString('de-DE')}</div>
               </div>
-              <button onClick={(e) => { e.stopPropagation(); handleDelete(c.id) }} className="text-gray-600 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100">🗑️</button>
+              <button onClick={(e) => { e.stopPropagation(); handleDeleteConvo(c.id) }}
+                className="text-gray-600 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">🗑️</button>
             </div>
           ))}
           {convos.length === 0 && <p className="text-gray-500 text-center py-6 text-xs">Keine Unterhaltungen</p>}
@@ -92,12 +116,29 @@ export default function Channel({ onUpdate }) {
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.map(m => (
                 <div key={m.id} className={`flex ${m.author === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[75%] px-3 py-2 rounded-xl text-sm ${m.author === 'user' ? 'bg-emerald-700/40 text-emerald-100' : 'bg-gray-800 text-gray-200'}`}>
+                  <div className={`max-w-[75%] px-3 py-2 rounded-xl text-sm group relative ${m.author === 'user' ? 'bg-emerald-700/40 text-emerald-100' : 'bg-gray-800 text-gray-200'}`}>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[10px] font-semibold uppercase tracking-wide opacity-60">{m.author === 'user' ? '👤 Mensch' : '🐢 Agent'}</span>
                       {m.task_ref && <span className="text-[10px] bg-yellow-900/50 text-yellow-300 px-1.5 rounded">Task #{m.task_ref}</span>}
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
+                        <button onClick={() => handleEditMsg(m)} className="text-gray-400 hover:text-blue-400 text-[10px]">✏️</button>
+                        <button onClick={() => handleDeleteMsg(m.id)} className="text-gray-400 hover:text-red-400 text-[10px]">🗑️</button>
+                      </div>
                     </div>
-                    <p className="whitespace-pre-wrap">{m.text}</p>
+
+                    {editMsg?.id === m.id ? (
+                      <div className="space-y-2">
+                        <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={3}
+                          className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" autoFocus />
+                        <div className="flex gap-1">
+                          <button onClick={handleSaveEdit} className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 rounded text-xs">Speichern</button>
+                          <button onClick={() => setEditMsg(null)} className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 rounded text-xs">Abbrechen</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap">{m.text}</p>
+                    )}
+
                     <div className="text-[10px] text-gray-500 mt-1">{new Date(m.created_at + 'Z').toLocaleString('de-DE')}</div>
                   </div>
                 </div>
