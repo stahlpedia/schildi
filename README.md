@@ -1,6 +1,6 @@
 # 🐢 Schildi Dashboard
 
-Dashboard für die Zusammenarbeit zwischen Thomas (Mensch) und Schildi (KI).
+Dashboard für die Zusammenarbeit zwischen Mensch und Openclaw (oder anderen Agents).
 
 ## Features
 
