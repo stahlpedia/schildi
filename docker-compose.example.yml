@@ -5,6 +5,7 @@ services:
       - "3333:3333"
     environment:
       - PORT=3333
+      - DASHBOARD_USER=thomas
       - DASHBOARD_PASSWORD=changeme
       - JWT_SECRET=change-this-to-a-random-string
       - WORKSPACE_PATH=/workspace

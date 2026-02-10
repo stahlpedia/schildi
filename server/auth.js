@@ -5,15 +5,16 @@ const db = require('./db');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
 function ensureDefaultUser() {
+  const username = process.env.DASHBOARD_USER || 'admin';
   const password = process.env.DASHBOARD_PASSWORD || 'changeme';
-  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get('thomas');
+  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
   if (!existing) {
     const hash = bcrypt.hashSync(password, 10);
-    db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('thomas', hash);
+    db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run(username, hash);
   } else {
     // Update password on every start so ENV changes take effect
     const hash = bcrypt.hashSync(password, 10);
-    db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(hash, 'thomas');
+    db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(hash, username);
   }
 }
 

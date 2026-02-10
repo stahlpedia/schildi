@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { login } from '../api'
 
 export default function Login({ onLogin }) {
-  const [username, setUsername] = useState('thomas')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
