@@ -5,6 +5,62 @@ const { authenticate } = require('../auth');
 const router = Router();
 router.use(authenticate);
 
+// === Spalten-API ===
+
+// Alle Spalten laden
+router.get('/columns', (req, res) => {
+  const columns = db.prepare('SELECT * FROM columns ORDER BY position ASC, id ASC').all();
+  res.json(columns);
+});
+
+// Spalte erstellen
+router.post('/columns', (req, res) => {
+  const { name, label, color = 'border-gray-600' } = req.body;
+  if (!name || !label) return res.status(400).json({ error: 'Name und Label erforderlich' });
+  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  const existing = db.prepare('SELECT id FROM columns WHERE name = ?').get(slug);
+  if (existing) return res.status(409).json({ error: 'Spalte existiert bereits' });
+  const maxPos = db.prepare('SELECT COALESCE(MAX(position),0) as m FROM columns').get();
+  const result = db.prepare('INSERT INTO columns (name, label, color, position) VALUES (?, ?, ?, ?)').run(slug, label, color, (maxPos?.m || 0) + 1);
+  const col = db.prepare('SELECT * FROM columns WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json(col);
+});
+
+// Spalten-Reihenfolge ändern (muss vor :id!)
+router.put('/columns/reorder', (req, res) => {
+  const { columns } = req.body;
+  const stmt = db.prepare('UPDATE columns SET position=? WHERE id=?');
+  const tx = db.transaction((items) => {
+    for (const c of items) stmt.run(c.position, c.id);
+  });
+  tx(columns || []);
+  res.json({ ok: true });
+});
+
+// Spalte updaten (umbenennen, Farbe, Position)
+router.put('/columns/:id', (req, res) => {
+  const col = db.prepare('SELECT * FROM columns WHERE id = ?').get(req.params.id);
+  if (!col) return res.status(404).json({ error: 'Nicht gefunden' });
+  const { label, color, position } = req.body;
+  const oldName = col.name;
+  db.prepare('UPDATE columns SET label=?, color=?, position=? WHERE id=?')
+    .run(label ?? col.label, color ?? col.color, position ?? col.position, req.params.id);
+  const updated = db.prepare('SELECT * FROM columns WHERE id = ?').get(req.params.id);
+  res.json(updated);
+});
+
+// Spalte löschen (verschiebt Karten nach backlog)
+router.delete('/columns/:id', (req, res) => {
+  const col = db.prepare('SELECT * FROM columns WHERE id = ?').get(req.params.id);
+  if (!col) return res.status(404).json({ error: 'Nicht gefunden' });
+  // Move cards to backlog before deleting
+  db.prepare('UPDATE cards SET column_name = ? WHERE column_name = ?').run('backlog', col.name);
+  db.prepare('DELETE FROM columns WHERE id = ?').run(req.params.id);
+  res.json({ ok: true, movedCardsTo: 'backlog' });
+});
+
+// === Karten-API ===
+
 // Alle Karten laden
 router.get('/cards', (req, res) => {
   const cards = db.prepare('SELECT * FROM cards ORDER BY position ASC, id ASC').all();

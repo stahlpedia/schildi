@@ -43,6 +43,13 @@ export const kanban = {
   reorder: (cards) => api('/kanban/cards/reorder', { method: 'PUT', body: JSON.stringify({ cards }) }),
 };
 
+export const columns = {
+  list: () => api('/kanban/columns'),
+  create: (col) => api('/kanban/columns', { method: 'POST', body: JSON.stringify(col) }),
+  update: (id, data) => api(`/kanban/columns/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id) => api(`/kanban/columns/${id}`, { method: 'DELETE' }),
+};
+
 export const memory = {
   files: () => api('/memory/files'),
   file: (path) => api(`/memory/file?path=${encodeURIComponent(path)}`),

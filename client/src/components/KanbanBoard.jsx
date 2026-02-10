@@ -1,28 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { kanban } from '../api'
+import { kanban, columns as columnsApi } from '../api'
 
-const COLUMNS = [
-  { id: 'backlog', label: 'Backlog', color: 'border-gray-600' },
-  { id: 'in-progress', label: 'In Progress', color: 'border-yellow-500' },
-  { id: 'done', label: 'Done', color: 'border-emerald-500' },
+const DEFAULT_COLORS = [
+  'border-gray-600', 'border-yellow-500', 'border-emerald-500',
+  'border-blue-500', 'border-purple-500', 'border-red-500', 'border-orange-500'
 ]
 
 export default function KanbanBoard() {
   const [cards, setCards] = useState([])
+  const [cols, setCols] = useState([])
   const [showForm, setShowForm] = useState(null)
   const [editCard, setEditCard] = useState(null)
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
   const [labels, setLabels] = useState('')
+  const [showColManager, setShowColManager] = useState(false)
+  const [newColLabel, setNewColLabel] = useState('')
+  const [newColColor, setNewColColor] = useState('border-gray-600')
+  const [editCol, setEditCol] = useState(null)
+  const [editColLabel, setEditColLabel] = useState('')
+  const [editColColor, setEditColColor] = useState('')
   const dragItem = useRef(null)
-  const dragOverCol = useRef(null)
 
-  const load = async () => { setCards(await kanban.list()) }
+  const load = async () => {
+    const [c, co] = await Promise.all([kanban.list(), columnsApi.list()])
+    setCards(c)
+    setCols(co)
+  }
   useEffect(() => { load() }, [])
 
-  const handleCreate = async (col) => {
+  // Card CRUD
+  const handleCreate = async (colName) => {
     if (!title.trim()) return
-    await kanban.create({ title, description: desc, column_name: col, labels: labels ? labels.split(',').map(l => l.trim()) : [] })
+    await kanban.create({ title, description: desc, column_name: colName, labels: labels ? labels.split(',').map(l => l.trim()) : [] })
     setTitle(''); setDesc(''); setLabels(''); setShowForm(null); load()
   }
 
@@ -36,12 +46,13 @@ export default function KanbanBoard() {
     await kanban.remove(id); load()
   }
 
+  // Drag & drop
   const onDragStart = (e, card) => { dragItem.current = card; e.dataTransfer.effectAllowed = 'move' }
-  const onDragOver = (e, colId) => { e.preventDefault(); dragOverCol.current = colId }
-  const onDrop = async (e, colId) => {
+  const onDragOver = (e) => { e.preventDefault() }
+  const onDrop = async (e, colName) => {
     e.preventDefault()
-    if (dragItem.current && dragItem.current.column_name !== colId) {
-      await kanban.update(dragItem.current.id, { column_name: colId })
+    if (dragItem.current && dragItem.current.column_name !== colName) {
+      await kanban.update(dragItem.current.id, { column_name: colName })
       load()
     }
     dragItem.current = null
@@ -51,10 +62,36 @@ export default function KanbanBoard() {
     setEditCard(card); setTitle(card.title); setDesc(card.description); setLabels((card.labels || []).join(', '))
   }
 
-  const colCards = (colId) => cards.filter(c => c.column_name === colId)
+  // Column management
+  const handleCreateCol = async () => {
+    if (!newColLabel.trim()) return
+    await columnsApi.create({ name: newColLabel, label: newColLabel, color: newColColor })
+    setNewColLabel(''); setNewColColor('border-gray-600'); load()
+  }
+
+  const handleUpdateCol = async () => {
+    if (!editCol) return
+    await columnsApi.update(editCol.id, { label: editColLabel, color: editColColor })
+    setEditCol(null); load()
+  }
+
+  const handleDeleteCol = async (id) => {
+    if (!confirm('Spalte löschen? Karten werden nach Backlog verschoben.')) return
+    await columnsApi.remove(id); load()
+  }
+
+  const colCards = (colName) => cards.filter(c => c.column_name === colName)
+
+  const colorClass = (color) => {
+    // Extract color for the dot preview
+    const match = color.match(/border-(\w+)-(\d+)/)
+    if (match) return `bg-${match[1]}-${match[2]}`
+    return 'bg-gray-600'
+  }
 
   return (
     <div>
+      {/* Edit card modal */}
       {editCard && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditCard(null)}>
           <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 w-full max-w-md" onClick={e => e.stopPropagation()}>
@@ -73,17 +110,81 @@ export default function KanbanBoard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {COLUMNS.map(col => (
+      {/* Column manager modal */}
+      {showColManager && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => { setShowColManager(false); setEditCol(null) }}>
+          <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Spalten verwalten</h3>
+            
+            {/* Existing columns */}
+            <div className="space-y-2 mb-4">
+              {cols.map(col => (
+                <div key={col.id} className="flex items-center gap-2 p-2 bg-gray-800 rounded-lg">
+                  {editCol?.id === col.id ? (
+                    <>
+                      <input value={editColLabel} onChange={e => setEditColLabel(e.target.value)}
+                        className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
+                      <select value={editColColor} onChange={e => setEditColColor(e.target.value)}
+                        className="px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white">
+                        {DEFAULT_COLORS.map(c => <option key={c} value={c}>{c.replace('border-', '').replace('-', ' ')}</option>)}
+                      </select>
+                      <button onClick={handleUpdateCol} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs">✓</button>
+                      <button onClick={() => setEditCol(null)} className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs">✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <div className={`w-3 h-3 rounded-full border-2 ${col.color}`}></div>
+                      <span className="flex-1 text-sm">{col.label}</span>
+                      <span className="text-gray-500 text-xs">{colCards(col.name).length} Karten</span>
+                      <button onClick={() => { setEditCol(col); setEditColLabel(col.label); setEditColColor(col.color) }}
+                        className="text-gray-500 hover:text-blue-400 text-xs">✏️</button>
+                      <button onClick={() => handleDeleteCol(col.id)}
+                        className="text-gray-500 hover:text-red-400 text-xs">🗑️</button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* New column */}
+            <div className="flex gap-2 items-center border-t border-gray-700 pt-4">
+              <input value={newColLabel} onChange={e => setNewColLabel(e.target.value)} placeholder="Neue Spalte..."
+                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
+              <select value={newColColor} onChange={e => setNewColColor(e.target.value)}
+                className="px-2 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white">
+                {DEFAULT_COLORS.map(c => <option key={c} value={c}>{c.replace('border-', '').replace('-', ' ')}</option>)}
+              </select>
+              <button onClick={handleCreateCol} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">+</button>
+            </div>
+
+            <div className="flex justify-end mt-4">
+              <button onClick={() => { setShowColManager(false); setEditCol(null) }}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Schließen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Column manager button */}
+      <div className="flex justify-end mb-4">
+        <button onClick={() => setShowColManager(true)}
+          className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors">
+          ⚙️ Spalten verwalten
+        </button>
+      </div>
+
+      {/* Board */}
+      <div className="grid gap-6" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>
+        {cols.map(col => (
           <div key={col.id} className={`bg-gray-900 rounded-xl border-t-4 ${col.color} p-4 min-h-[400px]`}
-            onDragOver={e => onDragOver(e, col.id)} onDrop={e => onDrop(e, col.id)}>
+            onDragOver={onDragOver} onDrop={e => onDrop(e, col.name)}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-lg">{col.label} <span className="text-gray-500 text-sm ml-1">{colCards(col.id).length}</span></h2>
-              <button onClick={() => { setShowForm(showForm === col.id ? null : col.id); setTitle(''); setDesc(''); setLabels('') }}
+              <h2 className="font-bold text-lg">{col.label} <span className="text-gray-500 text-sm ml-1">{colCards(col.name).length}</span></h2>
+              <button onClick={() => { setShowForm(showForm === col.name ? null : col.name); setTitle(''); setDesc(''); setLabels('') }}
                 className="text-gray-500 hover:text-emerald-400 text-xl transition-colors">+</button>
             </div>
 
-            {showForm === col.id && (
+            {showForm === col.name && (
               <div className="mb-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
                 <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titel"
                   className="w-full mb-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" autoFocus />
@@ -92,14 +193,14 @@ export default function KanbanBoard() {
                 <input value={labels} onChange={e => setLabels(e.target.value)} placeholder="Labels (kommagetrennt)"
                   className="w-full mb-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
                 <div className="flex gap-2">
-                  <button onClick={() => handleCreate(col.id)} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-sm transition-colors">Erstellen</button>
+                  <button onClick={() => handleCreate(col.name)} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-sm transition-colors">Erstellen</button>
                   <button onClick={() => setShowForm(null)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors">×</button>
                 </div>
               </div>
             )}
 
             <div className="space-y-3">
-              {colCards(col.id).map(card => (
+              {colCards(col.name).map(card => (
                 <div key={card.id} draggable onDragStart={e => onDragStart(e, card)}
                   className="bg-gray-800 p-3 rounded-lg border border-gray-700 cursor-grab hover:border-gray-600 transition-colors group">
                   <div className="flex justify-between items-start">
