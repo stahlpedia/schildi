@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { pages } from '../api'
+import { pages, kanban } from '../api'
 
 // Load CodeMirror from CDN
 function useCodeMirror(containerRef, value, onChange, active) {
@@ -250,11 +250,33 @@ export default function Pages() {
     const domain = domains.find(d => d.id === selectedDomain)
     if (!domain) return
     if (domain.public_url) {
-      const base = domain.public_url.replace(/\/+$/, '')
+      let base = domain.public_url.replace(/\/+$/, '')
+      if (!/^https?:\/\//i.test(base)) base = `https://${base}`
       window.open(`${base}/${pageData.slug}`, '_blank')
     } else {
       window.open(`http://${domain.host}:${domain.port}/${pageData.slug}`, '_blank')
     }
+  }
+
+  const [taskCreating, setTaskCreating] = useState(false)
+  const [taskSuccess, setTaskSuccess] = useState(false)
+
+  const handleCreateTask = async () => {
+    if (!aiPrompt.trim() || !pageData) return
+    setTaskCreating(true)
+    try {
+      const domain = domains.find(d => d.id === selectedDomain)
+      const domainName = domain ? (domain.public_url || domain.name) : 'unknown'
+      await kanban.create({
+        title: `Page Update: ${pageTitle || pageData.slug}`,
+        description: `**AI-Prompt:**\n${aiPrompt}\n\n**Domain:** ${domainName}\n**Page:** /${pageData.slug}`,
+        column_name: 'backlog',
+        labels: ['pages', 'ai-prompt'],
+      })
+      setTaskSuccess(true)
+      setTimeout(() => setTaskSuccess(false), 3000)
+    } catch (e) { setError(e.message) }
+    setTaskCreating(false)
   }
 
   const currentDomain = domains.find(d => d.id === selectedDomain)
@@ -348,7 +370,13 @@ export default function Pages() {
                 </div>
                 {/* AI Prompt */}
                 <div>
-                  <label className="text-[10px] text-gray-500 uppercase tracking-wide">🤖 AI-Prompt</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] text-gray-500 uppercase tracking-wide">🤖 AI-Prompt</label>
+                    <button onClick={handleCreateTask} disabled={!aiPrompt.trim() || taskCreating}
+                      className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed rounded text-[10px] text-gray-300 transition-colors">
+                      {taskSuccess ? '✅ Task erstellt!' : taskCreating ? '⏳...' : '→ Kanban'}
+                    </button>
+                  </div>
                   <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
                     placeholder="Prompt für KI-Generierung dieser Page (z.B. 'Erstelle eine Landing Page für...')"
                     rows={3}
