@@ -13,9 +13,9 @@ router.get('/domains', (req, res) => {
 });
 
 router.post('/domains', (req, res) => {
-  const { name, host, port, api_key } = req.body;
+  const { name, host, port, api_key, public_url } = req.body;
   if (!name || !host || !port) return res.status(400).json({ error: 'name, host, port erforderlich' });
-  const result = db.prepare('INSERT INTO domains (name, host, port, api_key) VALUES (?, ?, ?, ?)').run(name, host, port || 3000, api_key || '');
+  const result = db.prepare('INSERT INTO domains (name, host, port, api_key, public_url) VALUES (?, ?, ?, ?, ?)').run(name, host, port || 3000, api_key || '', public_url || '');
   const domain = db.prepare('SELECT * FROM domains WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(domain);
 });
@@ -23,9 +23,9 @@ router.post('/domains', (req, res) => {
 router.put('/domains/:id', (req, res) => {
   const domain = db.prepare('SELECT * FROM domains WHERE id = ?').get(req.params.id);
   if (!domain) return res.status(404).json({ error: 'Domain nicht gefunden' });
-  const { name, host, port, api_key } = req.body;
-  db.prepare("UPDATE domains SET name = ?, host = ?, port = ?, api_key = ?, updated_at = datetime('now') WHERE id = ?")
-    .run(name ?? domain.name, host ?? domain.host, port ?? domain.port, api_key ?? domain.api_key, req.params.id);
+  const { name, host, port, api_key, public_url } = req.body;
+  db.prepare("UPDATE domains SET name = ?, host = ?, port = ?, api_key = ?, public_url = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(name ?? domain.name, host ?? domain.host, port ?? domain.port, api_key ?? domain.api_key, public_url ?? domain.public_url ?? '', req.params.id);
   const updated = db.prepare('SELECT * FROM domains WHERE id = ?').get(req.params.id);
   res.json(updated);
 });

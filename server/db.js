@@ -76,6 +76,13 @@ try {
   db.exec('ALTER TABLE conversations ADD COLUMN agent_unread INTEGER DEFAULT 0');
 }
 
+// Migrate: add public_url column to domains if missing
+try {
+  db.prepare('SELECT public_url FROM domains LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE domains ADD COLUMN public_url TEXT DEFAULT ''");
+}
+
 // Seed default columns if empty
 const colCount = db.prepare('SELECT COUNT(*) as c FROM columns').get();
 if (colCount.c === 0) {

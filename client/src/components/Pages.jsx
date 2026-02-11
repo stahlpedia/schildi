@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { pages } from '../api'
 
 // Load CodeMirror from CDN
-function useCodeMirror(containerRef, value, onChange) {
+function useCodeMirror(containerRef, value, onChange, active) {
   const editorRef = useRef(null)
   const [loaded, setLoaded] = useState(!!window.CodeMirror)
 
@@ -32,7 +32,7 @@ function useCodeMirror(containerRef, value, onChange) {
   }, [])
 
   useEffect(() => {
-    if (!loaded || !containerRef.current) return
+    if (!loaded || !active || !containerRef.current) return
     if (editorRef.current) { editorRef.current.toTextArea(); editorRef.current = null }
     const ta = document.createElement('textarea')
     containerRef.current.innerHTML = ''
@@ -45,8 +45,10 @@ function useCodeMirror(containerRef, value, onChange) {
     cm.on('change', () => onChange(cm.getValue()))
     cm.setSize('100%', '100%')
     editorRef.current = cm
+    // Force refresh after a tick to fix rendering
+    setTimeout(() => cm.refresh(), 50)
     return () => { if (editorRef.current) { editorRef.current.toTextArea(); editorRef.current = null } }
-  }, [loaded, containerRef])
+  }, [loaded, active])
 
   // Update value from outside without triggering onChange loop
   useEffect(() => {
@@ -59,16 +61,17 @@ function useCodeMirror(containerRef, value, onChange) {
 }
 
 function DomainModal({ domain, onSave, onClose }) {
-  const [form, setForm] = useState(domain || { name: '', host: '', port: 3000, api_key: '' })
+  const [form, setForm] = useState(domain || { name: '', host: '', port: 3000, api_key: '', public_url: '' })
   const set = (k, v) => setForm({ ...form, [k]: v })
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-96 space-y-4" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-bold text-white">{domain ? 'Domain bearbeiten' : 'Neue Domain'}</h3>
-        {[['Name', 'name', 'text'], ['Host', 'host', 'text'], ['Port', 'port', 'number'], ['API Key', 'api_key', 'text']].map(([label, key, type]) => (
+        {[['Name', 'name', 'text'], ['Host', 'host', 'text'], ['Port', 'port', 'number'], ['API Key', 'api_key', 'text'], ['Public URL', 'public_url', 'text']].map(([label, key, type]) => (
           <div key={key}>
             <label className="text-xs text-gray-400">{label}</label>
-            <input value={form[key]} onChange={e => set(key, type === 'number' ? +e.target.value : e.target.value)} type={type}
+            <input value={form[key] || ''} onChange={e => set(key, type === 'number' ? +e.target.value : e.target.value)} type={type}
+              placeholder={key === 'public_url' ? 'https://example.com (optional)' : ''}
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
           </div>
         ))}
@@ -130,9 +133,10 @@ export default function Pages() {
   const [metaTitle, setMetaTitle] = useState('')
   const [metaDesc, setMetaDesc] = useState('')
   const [pageTitle, setPageTitle] = useState('')
+  const [aiPrompt, setAiPrompt] = useState('')
   const cmRef = useRef(null)
 
-  const { loaded: cmLoaded } = useCodeMirror(cmRef, editorContent, setEditorContent)
+  const { loaded: cmLoaded } = useCodeMirror(cmRef, editorContent, setEditorContent, !!pageData)
 
   const loadDomains = async () => {
     try {
@@ -158,6 +162,7 @@ export default function Pages() {
       setPageTitle(data.title || '')
       setMetaTitle(data.seo_title || data.meta?.title || '')
       setMetaDesc(data.seo_description || data.meta?.description || '')
+      setAiPrompt(data.ai_prompt || '')
       // Content: for landing pages with sections array, serialize to HTML; for slides, use content directly
       if (data.type === 'landing' && Array.isArray(data.content)) {
         setEditorContent(data.content.map(s => `<!-- section: ${s.type || 'default'} -->\n${s.content || ''}`).join('\n\n'))
@@ -222,8 +227,10 @@ export default function Pages() {
       await pages.updatePage(selectedDomain, pageData.slug, {
         title: pageTitle,
         content,
+        meta: { title: metaTitle, description: metaDesc },
         seo_title: metaTitle,
         seo_description: metaDesc,
+        ai_prompt: aiPrompt,
       })
       setError(null)
     } catch (e) { setError(e.message) }
@@ -241,7 +248,13 @@ export default function Pages() {
   const handlePreview = () => {
     if (!pageData || !selectedDomain) return
     const domain = domains.find(d => d.id === selectedDomain)
-    if (domain) window.open(`http://${domain.host}:${domain.port}/${pageData.slug}`, '_blank')
+    if (!domain) return
+    if (domain.public_url) {
+      const base = domain.public_url.replace(/\/+$/, '')
+      window.open(`${base}/${pageData.slug}`, '_blank')
+    } else {
+      window.open(`http://${domain.host}:${domain.port}/${pageData.slug}`, '_blank')
+    }
   }
 
   const currentDomain = domains.find(d => d.id === selectedDomain)
@@ -332,6 +345,14 @@ export default function Pages() {
                     <input value={metaDesc} onChange={e => setMetaDesc(e.target.value)}
                       className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
                   </div>
+                </div>
+                {/* AI Prompt */}
+                <div>
+                  <label className="text-[10px] text-gray-500 uppercase tracking-wide">🤖 AI-Prompt</label>
+                  <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
+                    placeholder="Prompt für KI-Generierung dieser Page (z.B. 'Erstelle eine Landing Page für...')"
+                    rows={3}
+                    className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500 resize-y" />
                 </div>
               </div>
 
