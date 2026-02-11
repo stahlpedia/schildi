@@ -101,6 +101,31 @@ try {
   db.exec('ALTER TABLE columns ADD COLUMN board_id INTEGER');
 }
 
+// Migrate: rebuild columns table to fix UNIQUE constraint (name → name+board_id)
+try {
+  // Check if old UNIQUE(name) constraint exists by trying a duplicate name with different board_id
+  // We do this by checking the SQL schema
+  const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='columns'").get();
+  if (tableInfo && tableInfo.sql && !tableInfo.sql.includes('UNIQUE(name, board_id)') && !tableInfo.sql.includes('UNIQUE( name, board_id )')) {
+    db.exec(`
+      CREATE TABLE columns_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        label TEXT NOT NULL,
+        color TEXT NOT NULL DEFAULT 'border-gray-600',
+        position INTEGER DEFAULT 0,
+        board_id INTEGER,
+        UNIQUE(name, board_id)
+      );
+      INSERT INTO columns_new SELECT id, name, label, color, position, board_id FROM columns;
+      DROP TABLE columns;
+      ALTER TABLE columns_new RENAME TO columns;
+    `);
+  }
+} catch (e) {
+  console.warn('Column constraint migration skipped:', e.message);
+}
+
 // Migrate: add board_id column to cards if missing
 try {
   db.prepare('SELECT board_id FROM cards LIMIT 1').get();
@@ -137,10 +162,10 @@ const pagesBoard = db.prepare("SELECT id FROM boards WHERE slug = 'pages'").get(
 if (pagesBoard) {
   const pagesColCount = db.prepare('SELECT COUNT(*) as c FROM columns WHERE board_id = ?').get(pagesBoard.id);
   if (pagesColCount.c === 0) {
-    const insert = db.prepare('INSERT INTO columns (name, label, color, position, board_id) VALUES (?, ?, ?, ?, ?)');
-    insert.run('backlog', 'Backlog', 'border-gray-600', 1, pagesBoard.id);
-    insert.run('in-progress', 'In Progress', 'border-yellow-500', 2, pagesBoard.id);
-    insert.run('done', 'Done', 'border-emerald-500', 3, pagesBoard.id);
+    const insertCol = db.prepare('INSERT OR IGNORE INTO columns (name, label, color, position, board_id) VALUES (?, ?, ?, ?, ?)');
+    insertCol.run('backlog', 'Backlog', 'border-gray-600', 1, pagesBoard.id);
+    insertCol.run('in-progress', 'In Progress', 'border-yellow-500', 2, pagesBoard.id);
+    insertCol.run('done', 'Done', 'border-emerald-500', 3, pagesBoard.id);
   }
 }
 
