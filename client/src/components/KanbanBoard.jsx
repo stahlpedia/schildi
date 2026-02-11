@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { kanban, columns as columnsApi } from '../api'
+import { kanban, columns as columnsApi, boards } from '../api'
 
 const DEFAULT_COLORS = [
   'border-gray-600', 'border-yellow-500', 'border-emerald-500',
@@ -9,6 +9,8 @@ const DEFAULT_COLORS = [
 export default function KanbanBoard() {
   const [cards, setCards] = useState([])
   const [cols, setCols] = useState([])
+  const [boardsList, setBoardsList] = useState([])
+  const [selectedBoard, setSelectedBoard] = useState(null)
   const [showForm, setShowForm] = useState(null)
   const [editCard, setEditCard] = useState(null)
   const [title, setTitle] = useState('')
@@ -20,19 +22,32 @@ export default function KanbanBoard() {
   const [editCol, setEditCol] = useState(null)
   const [editColLabel, setEditColLabel] = useState('')
   const [editColColor, setEditColColor] = useState('')
+  const [showBoardModal, setShowBoardModal] = useState(false)
+  const [newBoardName, setNewBoardName] = useState('')
   const dragItem = useRef(null)
 
+  const loadBoards = async () => {
+    const list = await boards.list()
+    setBoardsList(list)
+    if (list.length > 0 && !selectedBoard) {
+      setSelectedBoard(list[0].id)
+    }
+  }
+
   const load = async () => {
-    const [c, co] = await Promise.all([kanban.list(), columnsApi.list()])
+    if (!selectedBoard) return
+    const [c, co] = await Promise.all([kanban.list(selectedBoard), columnsApi.list(selectedBoard)])
     setCards(c)
     setCols(co)
   }
-  useEffect(() => { load() }, [])
+
+  useEffect(() => { loadBoards() }, [])
+  useEffect(() => { if (selectedBoard) load() }, [selectedBoard])
 
   // Card CRUD
   const handleCreate = async (colName) => {
-    if (!title.trim()) return
-    await kanban.create({ title, description: desc, column_name: colName, labels: labels ? labels.split(',').map(l => l.trim()) : [] })
+    if (!title.trim() || !selectedBoard) return
+    await kanban.create({ title, description: desc, column_name: colName, labels: labels ? labels.split(',').map(l => l.trim()) : [], board_id: selectedBoard })
     setTitle(''); setDesc(''); setLabels(''); setShowForm(null); load()
   }
 
@@ -64,9 +79,22 @@ export default function KanbanBoard() {
 
   // Column management
   const handleCreateCol = async () => {
-    if (!newColLabel.trim()) return
-    await columnsApi.create({ name: newColLabel, label: newColLabel, color: newColColor })
+    if (!newColLabel.trim() || !selectedBoard) return
+    await columnsApi.create({ name: newColLabel, label: newColLabel, color: newColColor, board_id: selectedBoard })
     setNewColLabel(''); setNewColColor('border-gray-600'); load()
+  }
+
+  // Board management
+  const handleCreateBoard = async () => {
+    if (!newBoardName.trim()) return
+    await boards.create({ name: newBoardName })
+    setNewBoardName(''); setShowBoardModal(false); loadBoards()
+  }
+
+  const handleDeleteBoard = async () => {
+    if (!selectedBoard || !confirm('Board wirklich löschen? Karten werden nach General verschoben.')) return
+    await boards.remove(selectedBoard)
+    setSelectedBoard(null); loadBoards()
   }
 
   const handleUpdateCol = async () => {
@@ -164,6 +192,37 @@ export default function KanbanBoard() {
           </div>
         </div>
       )}
+
+      {/* Board modal */}
+      {showBoardModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowBoardModal(false)}>
+          <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Neues Board</h3>
+            <input value={newBoardName} onChange={e => setNewBoardName(e.target.value)} placeholder="Board Name"
+              className="w-full mb-4 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" autoFocus />
+            <div className="flex gap-2">
+              <button onClick={handleCreateBoard} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Erstellen</button>
+              <button onClick={() => setShowBoardModal(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Board selector */}
+      <div className="flex items-center gap-3 bg-gray-900 rounded-xl border border-gray-800 px-4 py-3 mb-4">
+        <span className="text-lg">🗂️</span>
+        <select value={selectedBoard || ''} onChange={e => setSelectedBoard(+e.target.value || null)}
+          className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500">
+          <option value="">Board wählen...</option>
+          {boardsList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+        <button onClick={() => setShowBoardModal(true)}
+          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Board</button>
+        {selectedBoard && boardsList.find(b => b.id === selectedBoard)?.type === 'custom' && (
+          <button onClick={handleDeleteBoard}
+            className="px-3 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-xs transition-colors">🗑️ Löschen</button>
+        )}
+      </div>
 
       {/* Column manager button */}
       <div className="flex justify-end mb-4">

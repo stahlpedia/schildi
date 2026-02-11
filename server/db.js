@@ -14,12 +14,22 @@ db.exec(`
     password_hash TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS boards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL DEFAULT 'custom',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS columns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
     label TEXT NOT NULL,
     color TEXT NOT NULL DEFAULT 'border-gray-600',
-    position INTEGER DEFAULT 0
+    position INTEGER DEFAULT 0,
+    board_id INTEGER,
+    UNIQUE(name, board_id)
   );
 
   CREATE TABLE IF NOT EXISTS cards (
@@ -29,6 +39,7 @@ db.exec(`
     column_name TEXT NOT NULL DEFAULT 'backlog',
     labels TEXT DEFAULT '[]',
     position INTEGER DEFAULT 0,
+    board_id INTEGER,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
@@ -83,13 +94,42 @@ try {
   db.exec("ALTER TABLE domains ADD COLUMN public_url TEXT DEFAULT ''");
 }
 
+// Migrate: add board_id column to columns if missing
+try {
+  db.prepare('SELECT board_id FROM columns LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE columns ADD COLUMN board_id INTEGER');
+}
+
+// Migrate: add board_id column to cards if missing
+try {
+  db.prepare('SELECT board_id FROM cards LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE cards ADD COLUMN board_id INTEGER');
+}
+
+// Seed default boards if empty
+const boardCount = db.prepare('SELECT COUNT(*) as c FROM boards').get();
+if (boardCount.c === 0) {
+  db.prepare("INSERT INTO boards (name, slug, type) VALUES (?, ?, ?)").run('General', 'general', 'custom');
+  db.prepare("INSERT INTO boards (name, slug, type) VALUES (?, ?, ?)").run('Pages', 'pages', 'pages');
+}
+
+// Get the General board id for migration and seeding
+const generalBoard = db.prepare("SELECT id FROM boards WHERE slug = 'general'").get();
+const generalBoardId = generalBoard ? generalBoard.id : 1;
+
+// Migrate existing columns and cards without a board_id to General board
+db.prepare('UPDATE columns SET board_id = ? WHERE board_id IS NULL').run(generalBoardId);
+db.prepare('UPDATE cards SET board_id = ? WHERE board_id IS NULL').run(generalBoardId);
+
 // Seed default columns if empty
 const colCount = db.prepare('SELECT COUNT(*) as c FROM columns').get();
 if (colCount.c === 0) {
-  const insert = db.prepare('INSERT INTO columns (name, label, color, position) VALUES (?, ?, ?, ?)');
-  insert.run('backlog', 'Backlog', 'border-gray-600', 1);
-  insert.run('in-progress', 'In Progress', 'border-yellow-500', 2);
-  insert.run('done', 'Done', 'border-emerald-500', 3);
+  const insert = db.prepare('INSERT INTO columns (name, label, color, position, board_id) VALUES (?, ?, ?, ?, ?)');
+  insert.run('backlog', 'Backlog', 'border-gray-600', 1, generalBoardId);
+  insert.run('in-progress', 'In Progress', 'border-yellow-500', 2, generalBoardId);
+  insert.run('done', 'Done', 'border-emerald-500', 3, generalBoardId);
 }
 
 module.exports = db;

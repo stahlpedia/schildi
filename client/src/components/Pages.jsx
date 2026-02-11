@@ -296,7 +296,7 @@ export default function Pages() {
         <select value={selectedDomain || ''} onChange={e => { setSelectedDomain(+e.target.value); setPageData(null); setSelectedPage(null) }}
           className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500">
           <option value="">Domain wählen...</option>
-          {domains.map(d => <option key={d.id} value={d.id}>{d.name} ({d.host}:{d.port})</option>)}
+          {domains.map(d => <option key={d.id} value={d.id}>{d.name} ({d.public_url || `${d.host}:${d.port}`})</option>)}
         </select>
         <button onClick={() => { setEditDomain(null); setShowDomainModal(true) }}
           className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Domain</button>

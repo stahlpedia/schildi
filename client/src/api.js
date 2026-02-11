@@ -36,15 +36,22 @@ async function api(path, opts = {}) {
 }
 
 export const kanban = {
-  list: () => api('/kanban/cards'),
+  list: (boardId) => api(`/kanban/cards${boardId ? `?board_id=${boardId}` : ''}`),
   create: (card) => api('/kanban/cards', { method: 'POST', body: JSON.stringify(card) }),
   update: (id, data) => api(`/kanban/cards/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (id) => api(`/kanban/cards/${id}`, { method: 'DELETE' }),
   reorder: (cards) => api('/kanban/cards/reorder', { method: 'PUT', body: JSON.stringify({ cards }) }),
 };
 
+export const boards = {
+  list: () => api('/kanban/boards'),
+  create: (data) => api('/kanban/boards', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => api(`/kanban/boards/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id) => api(`/kanban/boards/${id}`, { method: 'DELETE' }),
+};
+
 export const columns = {
-  list: () => api('/kanban/columns'),
+  list: (boardId) => api(`/kanban/columns${boardId ? `?board_id=${boardId}` : ''}`),
   create: (col) => api('/kanban/columns', { method: 'POST', body: JSON.stringify(col) }),
   update: (id, data) => api(`/kanban/columns/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (id) => api(`/kanban/columns/${id}`, { method: 'DELETE' }),
