@@ -63,11 +63,11 @@ export default function App() {
         </div>
       </header>
       <main className="p-6">
-        {tab === 'Kanban' && <KanbanBoard />}
-        {tab === 'Memory' && <MemoryViewer />}
-        {tab === 'Logbuch' && <Logbuch />}
-        {tab === 'Channel' && <Channel onUpdate={checkUnanswered} />}
-        {tab === 'Pages' && <Pages />}
+        <div style={{ display: tab === 'Kanban' ? 'block' : 'none' }}><KanbanBoard /></div>
+        <div style={{ display: tab === 'Memory' ? 'block' : 'none' }}><MemoryViewer /></div>
+        <div style={{ display: tab === 'Logbuch' ? 'block' : 'none' }}><Logbuch /></div>
+        <div style={{ display: tab === 'Channel' ? 'block' : 'none' }}><Channel onUpdate={checkUnanswered} /></div>
+        <div style={{ display: tab === 'Pages' ? 'block' : 'none' }}><Pages /></div>
       </main>
     </div>
   )
