@@ -111,8 +111,8 @@ try {
 // Seed default boards if empty
 const boardCount = db.prepare('SELECT COUNT(*) as c FROM boards').get();
 if (boardCount.c === 0) {
-  db.prepare("INSERT INTO boards (name, slug, type) VALUES (?, ?, ?)").run('General', 'general', 'custom');
-  db.prepare("INSERT INTO boards (name, slug, type) VALUES (?, ?, ?)").run('Pages', 'pages', 'pages');
+  db.prepare("INSERT INTO boards (name, slug, type) VALUES (?, ?, ?)").run('General', 'general', 'system');
+  db.prepare("INSERT INTO boards (name, slug, type) VALUES (?, ?, ?)").run('Pages', 'pages', 'system');
 }
 
 // Get the General board id for migration and seeding
@@ -131,5 +131,20 @@ if (colCount.c === 0) {
   insert.run('in-progress', 'In Progress', 'border-yellow-500', 2, generalBoardId);
   insert.run('done', 'Done', 'border-emerald-500', 3, generalBoardId);
 }
+
+// Ensure Pages board has default columns
+const pagesBoard = db.prepare("SELECT id FROM boards WHERE slug = 'pages'").get();
+if (pagesBoard) {
+  const pagesColCount = db.prepare('SELECT COUNT(*) as c FROM columns WHERE board_id = ?').get(pagesBoard.id);
+  if (pagesColCount.c === 0) {
+    const insert = db.prepare('INSERT INTO columns (name, label, color, position, board_id) VALUES (?, ?, ?, ?, ?)');
+    insert.run('backlog', 'Backlog', 'border-gray-600', 1, pagesBoard.id);
+    insert.run('in-progress', 'In Progress', 'border-yellow-500', 2, pagesBoard.id);
+    insert.run('done', 'Done', 'border-emerald-500', 3, pagesBoard.id);
+  }
+}
+
+// Migrate: ensure system boards have correct type
+db.prepare("UPDATE boards SET type = 'system' WHERE slug IN ('general', 'pages') AND type != 'system'").run();
 
 module.exports = db;

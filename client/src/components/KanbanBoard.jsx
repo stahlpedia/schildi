@@ -87,8 +87,14 @@ export default function KanbanBoard() {
   // Board management
   const handleCreateBoard = async () => {
     if (!newBoardName.trim()) return
-    await boards.create({ name: newBoardName })
-    setNewBoardName(''); setShowBoardModal(false); loadBoards()
+    try {
+      const board = await boards.create({ name: newBoardName })
+      setNewBoardName(''); setShowBoardModal(false)
+      await loadBoards()
+      if (board?.id) setSelectedBoard(board.id)
+    } catch (e) {
+      alert('Board erstellen fehlgeschlagen: ' + e.message)
+    }
   }
 
   const handleDeleteBoard = async () => {

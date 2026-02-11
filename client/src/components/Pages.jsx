@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { pages, kanban } from '../api'
+import { pages, kanban, boards } from '../api'
 
 // Load CodeMirror from CDN
 function useCodeMirror(containerRef, value, onChange, active) {
@@ -267,11 +267,15 @@ export default function Pages() {
     try {
       const domain = domains.find(d => d.id === selectedDomain)
       const domainName = domain ? (domain.public_url || domain.name) : 'unknown'
+      // Find the Pages board to file the task there
+      const allBoards = await boards.list()
+      const pagesBoard = allBoards.find(b => b.slug === 'pages')
       await kanban.create({
         title: `Page Update: ${pageTitle || pageData.slug}`,
         description: `**AI-Prompt:**\n${aiPrompt}\n\n**Domain:** ${domainName}\n**Page:** /${pageData.slug}`,
         column_name: 'backlog',
         labels: ['pages', 'ai-prompt'],
+        board_id: pagesBoard ? pagesBoard.id : undefined,
       })
       setTaskSuccess(true)
       setTimeout(() => setTaskSuccess(false), 3000)
