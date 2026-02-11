@@ -25,6 +25,7 @@ app.use('/api/kanban', require('./routes/kanban'));
 app.use('/api/memory', require('./routes/memory'));
 app.use('/api/log', require('./routes/log'));
 app.use('/api/channel', require('./routes/channel'));
+app.use('/api/pages', require('./routes/pages'));
 
 // Serve frontend in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

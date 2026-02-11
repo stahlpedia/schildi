@@ -61,6 +61,18 @@ export const log = {
   remove: (id) => api(`/log/entries/${id}`, { method: 'DELETE' }),
 };
 
+export const pages = {
+  domains: () => api('/pages/domains'),
+  createDomain: (data) => api('/pages/domains', { method: 'POST', body: JSON.stringify(data) }),
+  updateDomain: (id, data) => api(`/pages/domains/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDomain: (id) => api(`/pages/domains/${id}`, { method: 'DELETE' }),
+  listPages: (domainId) => api(`/pages/domains/${domainId}/pages`),
+  createPage: (domainId, data) => api(`/pages/domains/${domainId}/pages`, { method: 'POST', body: JSON.stringify(data) }),
+  getPage: (domainId, slug) => api(`/pages/domains/${domainId}/pages/${slug}`),
+  updatePage: (domainId, slug, data) => api(`/pages/domains/${domainId}/pages/${slug}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePage: (domainId, slug) => api(`/pages/domains/${domainId}/pages/${slug}`, { method: 'DELETE' }),
+};
+
 export const channel = {
   conversations: () => api('/channel/conversations'),
   createConversation: (title, author) => api('/channel/conversations', { method: 'POST', body: JSON.stringify({ title, author }) }),
