@@ -51,11 +51,22 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS chat_channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL DEFAULT 'agent',
+    model_id TEXT DEFAULT '',
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     has_unanswered INTEGER DEFAULT 0,
     agent_unread INTEGER DEFAULT 0,
+    channel_id INTEGER,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -172,16 +183,26 @@ if (pagesBoard) {
 // Migrate: ensure system boards have correct type
 db.prepare("UPDATE boards SET type = 'system' WHERE slug IN ('general', 'pages') AND type != 'system'").run();
 
-// Migrate: add type and model_id columns to conversations if missing
+// Migrate: add channel_id to conversations if missing
 try {
-  db.prepare('SELECT type FROM conversations LIMIT 1').get();
+  db.prepare('SELECT channel_id FROM conversations LIMIT 1').get();
 } catch {
-  db.exec("ALTER TABLE conversations ADD COLUMN type TEXT NOT NULL DEFAULT 'agent'");
+  db.exec('ALTER TABLE conversations ADD COLUMN channel_id INTEGER');
 }
-try {
-  db.prepare('SELECT model_id FROM conversations LIMIT 1').get();
-} catch {
-  db.exec("ALTER TABLE conversations ADD COLUMN model_id TEXT DEFAULT ''");
+
+// Remove old type/model_id from conversations (now on chat_channels)
+// No need to drop columns in SQLite, just ignore them
+
+// Seed default Schildi channel if empty
+const chatChannelCount = db.prepare('SELECT COUNT(*) as c FROM chat_channels').get();
+if (chatChannelCount.c === 0) {
+  db.prepare("INSERT INTO chat_channels (name, slug, type, model_id, is_default) VALUES (?, ?, ?, ?, ?)").run('Schildi', 'schildi', 'agent', '', 1);
+}
+
+// Assign orphan conversations to the default channel
+const defaultChannel = db.prepare("SELECT id FROM chat_channels WHERE is_default = 1").get();
+if (defaultChannel) {
+  db.prepare('UPDATE conversations SET channel_id = ? WHERE channel_id IS NULL').run(defaultChannel.id);
 }
 
 module.exports = db;

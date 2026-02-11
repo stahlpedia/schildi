@@ -80,10 +80,17 @@ export const pages = {
   deletePage: (domainId, slug) => api(`/pages/domains/${domainId}/pages/${slug}`, { method: 'DELETE' }),
 };
 
-export const channel = {
-  conversations: () => api('/channel/conversations'),
-  createConversation: (title, author, type, model_id) => api('/channel/conversations', { method: 'POST', body: JSON.stringify({ title, author, type, model_id }) }),
+export const chatChannels = {
+  list: () => api('/channel/chat-channels'),
+  create: (data) => api('/channel/chat-channels', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => api(`/channel/chat-channels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id) => api(`/channel/chat-channels/${id}`, { method: 'DELETE' }),
   models: () => api('/channel/models'),
+};
+
+export const channel = {
+  conversations: (channelId) => api(`/channel/conversations${channelId ? `?channel_id=${channelId}` : ''}`),
+  createConversation: (title, channel_id) => api('/channel/conversations', { method: 'POST', body: JSON.stringify({ title, channel_id }) }),
   messages: (convoId) => api(`/channel/conversations/${convoId}/messages`),
   sendMessage: (convoId, author, text, task_ref) => api(`/channel/conversations/${convoId}/messages`, { method: 'POST', body: JSON.stringify({ author, text, task_ref }) }),
   unanswered: () => api('/channel/unanswered'),
