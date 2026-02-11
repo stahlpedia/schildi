@@ -2,6 +2,9 @@ const { Router } = require('express');
 const db = require('../db');
 const { authenticate } = require('../auth');
 
+const OPENWEBUI_URL = process.env.OPENWEBUI_URL || 'http://open-webui:8080';
+const OPENWEBUI_API_KEY = process.env.OPENWEBUI_API_KEY || '';
+
 const router = Router();
 router.use(authenticate);
 
@@ -13,11 +16,10 @@ router.get('/conversations', (req, res) => {
 
 // Create conversation
 router.post('/conversations', (req, res) => {
-  const { title, author = 'user' } = req.body;
+  const { title, author = 'user', type = 'agent', model_id = '' } = req.body;
   const now = new Date().toISOString().replace('T', ' ').slice(0, 16);
   const fullTitle = title ? `${now} — ${title}` : now;
-  // Agent-created conversations are also "unanswered" (human hasn't seen them yet)
-  const result = db.prepare('INSERT INTO conversations (title, has_unanswered) VALUES (?, ?)').run(fullTitle, 1);
+  const result = db.prepare('INSERT INTO conversations (title, has_unanswered, type, model_id) VALUES (?, ?, ?, ?)').run(fullTitle, 1, type, model_id);
   const convo = db.prepare('SELECT * FROM conversations WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(convo);
 });
@@ -31,10 +33,13 @@ router.get('/conversations/:id/messages', (req, res) => {
 });
 
 // Post message to conversation
-router.post('/conversations/:id/messages', (req, res) => {
+router.post('/conversations/:id/messages', async (req, res) => {
   const { author, text, task_ref } = req.body;
   if (!author || !text) return res.status(400).json({ error: 'author und text erforderlich' });
   if (!['user', 'agent'].includes(author)) return res.status(400).json({ error: 'author muss user oder agent sein' });
+
+  const convo = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
+  if (!convo) return res.status(404).json({ error: 'Conversation nicht gefunden' });
 
   const result = db.prepare('INSERT INTO messages (conversation_id, author, text, task_ref) VALUES (?, ?, ?, ?)').run(req.params.id, author, text, task_ref || null);
 
@@ -47,6 +52,46 @@ router.post('/conversations/:id/messages', (req, res) => {
   }
 
   const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+
+  // If this is a model-type conversation and the user sent the message, call OpenWebUI
+  if (convo.type === 'model' && author === 'user' && convo.model_id) {
+    try {
+      // Build conversation history
+      const history = db.prepare('SELECT author, text FROM messages WHERE conversation_id = ? ORDER BY created_at ASC').all(req.params.id);
+      const chatMessages = history.map(m => ({
+        role: m.author === 'user' ? 'user' : 'assistant',
+        content: m.text
+      }));
+
+      const response = await fetch(`${OPENWEBUI_URL}/api/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENWEBUI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: convo.model_id,
+          messages: chatMessages
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        // Save error as agent message
+        db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', `⚠️ Fehler von OpenWebUI: ${response.status} — ${errText}`);
+        db.prepare('UPDATE conversations SET has_unanswered = 1 WHERE id = ?').run(req.params.id);
+      } else {
+        const data = await response.json();
+        const reply = data.choices?.[0]?.message?.content || '(Keine Antwort)';
+        db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', reply);
+        db.prepare('UPDATE conversations SET has_unanswered = 1 WHERE id = ?').run(req.params.id);
+      }
+    } catch (e) {
+      db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', `⚠️ Verbindungsfehler: ${e.message}`);
+      db.prepare('UPDATE conversations SET has_unanswered = 1 WHERE id = ?').run(req.params.id);
+    }
+  }
+
   res.status(201).json(msg);
 });
 
@@ -93,6 +138,23 @@ router.delete('/conversations/:id', (req, res) => {
   db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(req.params.id);
   db.prepare('DELETE FROM conversations WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// List available models from OpenWebUI
+router.get('/models', async (req, res) => {
+  if (!OPENWEBUI_API_KEY) return res.json([]);
+  try {
+    const response = await fetch(`${OPENWEBUI_URL}/api/models`, {
+      headers: { 'Authorization': `Bearer ${OPENWEBUI_API_KEY}` }
+    });
+    if (!response.ok) return res.json([]);
+    const data = await response.json();
+    // OpenWebUI returns { data: [...] } in OpenAI format
+    const models = (data.data || data || []).map(m => ({ id: m.id, name: m.name || m.id }));
+    res.json(models);
+  } catch {
+    res.json([]);
+  }
 });
 
 module.exports = router;

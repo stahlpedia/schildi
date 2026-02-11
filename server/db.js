@@ -172,4 +172,16 @@ if (pagesBoard) {
 // Migrate: ensure system boards have correct type
 db.prepare("UPDATE boards SET type = 'system' WHERE slug IN ('general', 'pages') AND type != 'system'").run();
 
+// Migrate: add type and model_id columns to conversations if missing
+try {
+  db.prepare('SELECT type FROM conversations LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE conversations ADD COLUMN type TEXT NOT NULL DEFAULT 'agent'");
+}
+try {
+  db.prepare('SELECT model_id FROM conversations LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE conversations ADD COLUMN model_id TEXT DEFAULT ''");
+}
+
 module.exports = db;

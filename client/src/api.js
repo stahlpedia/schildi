@@ -82,7 +82,8 @@ export const pages = {
 
 export const channel = {
   conversations: () => api('/channel/conversations'),
-  createConversation: (title, author) => api('/channel/conversations', { method: 'POST', body: JSON.stringify({ title, author }) }),
+  createConversation: (title, author, type, model_id) => api('/channel/conversations', { method: 'POST', body: JSON.stringify({ title, author, type, model_id }) }),
+  models: () => api('/channel/models'),
   messages: (convoId) => api(`/channel/conversations/${convoId}/messages`),
   sendMessage: (convoId, author, text, task_ref) => api(`/channel/conversations/${convoId}/messages`, { method: 'POST', body: JSON.stringify({ author, text, task_ref }) }),
   unanswered: () => api('/channel/unanswered'),
