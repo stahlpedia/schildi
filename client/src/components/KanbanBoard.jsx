@@ -228,12 +228,9 @@ export default function KanbanBoard() {
           <button onClick={handleDeleteBoard}
             className="px-3 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-xs transition-colors">🗑️ Löschen</button>
         )}
-      </div>
-
-      {/* Column manager button */}
-      <div className="flex justify-end mb-4">
+        <div className="flex-1" />
         <button onClick={() => setShowColManager(true)}
-          className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors">
+          className="px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors">
           ⚙️ Spalten verwalten
         </button>
       </div>
