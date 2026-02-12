@@ -238,15 +238,14 @@ router.post('/tasks/:id/execute', async (req, res) => {
     const data = await response.json();
     const result = data.choices?.[0]?.message?.content || 'Keine Antwort erhalten';
 
-    // Save result and move task to in-progress if it's in backlog
-    const newColumn = task.column_name === 'backlog' ? 'in-progress' : task.column_name;
-    db.prepare(`UPDATE cards SET result=?, column_name=?, updated_at=datetime('now') WHERE id=?`)
-      .run(result, newColumn, req.params.id);
+    // Save result and move task to done
+    db.prepare(`UPDATE cards SET result=?, column_name='done', updated_at=datetime('now') WHERE id=?`)
+      .run(result, req.params.id);
 
     res.json({ 
       success: true, 
       result, 
-      movedTo: newColumn !== task.column_name ? newColumn : null 
+      movedTo: 'done'
     });
 
   } catch (error) {
