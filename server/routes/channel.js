@@ -4,6 +4,8 @@ const { authenticate } = require('../auth');
 
 const OPENWEBUI_URL = process.env.OPENWEBUI_URL || 'http://open-webui:8080';
 const OPENWEBUI_API_KEY = process.env.OPENWEBUI_API_KEY || '';
+const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://openclaw:18789';
+const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
 
 const router = Router();
 router.use(authenticate);
@@ -94,6 +96,44 @@ router.post('/conversations/:id/messages', async (req, res) => {
   }
 
   const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+
+  // If agent channel + user message → call OpenClaw
+  if (convo.ch_type === 'agent' && author === 'user' && OPENCLAW_TOKEN) {
+    try {
+      const history = db.prepare('SELECT author, text FROM messages WHERE conversation_id = ? ORDER BY created_at ASC').all(req.params.id);
+      const chatMessages = history.map(m => ({
+        role: m.author === 'user' ? 'user' : 'assistant',
+        content: m.text
+      }));
+
+      const response = await fetch(`${OPENCLAW_URL}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENCLAW_TOKEN}`,
+          'Content-Type': 'application/json',
+          'x-openclaw-agent-id': 'main'
+        },
+        body: JSON.stringify({
+          model: 'openclaw:main',
+          messages: chatMessages,
+          user: `schildi-dashboard-convo-${req.params.id}`
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', `⚠️ Fehler: ${response.status} — ${errText}`);
+      } else {
+        const data = await response.json();
+        const reply = data.choices?.[0]?.message?.content || '(Keine Antwort)';
+        db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', reply);
+      }
+      db.prepare('UPDATE conversations SET has_unanswered = 1 WHERE id = ?').run(req.params.id);
+    } catch (e) {
+      db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', `⚠️ Verbindungsfehler: ${e.message}`);
+      db.prepare('UPDATE conversations SET has_unanswered = 1 WHERE id = ?').run(req.params.id);
+    }
+  }
 
   // If model channel + user message → call OpenWebUI
   if (convo.ch_type === 'model' && author === 'user' && convo.ch_model_id) {
