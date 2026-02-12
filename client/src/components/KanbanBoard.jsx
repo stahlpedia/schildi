@@ -157,9 +157,13 @@ export default function KanbanBoard(props = {}) {
     await columnsApi.remove(id); load()
   }
 
+  const [executeMsg, setExecuteMsg] = useState(null)
+
   const handleExecute = async (card) => {
     if (executing === card.id) return
     setExecuting(card.id)
+    setEditCard(null) // Dialog sofort schließen
+    setExecuteMsg({ id: card.id, text: '🐢 Schildi arbeitet an diesem Task...', type: 'loading' })
     try {
       const response = await fetch(`/api/kanban/tasks/${card.id}/execute`, {
         method: 'POST',
@@ -170,13 +174,16 @@ export default function KanbanBoard(props = {}) {
       })
       const result = await response.json()
       if (response.ok) {
-        alert(`🐢 Schildi hat den Task bearbeitet!\n\n${result.result.substring(0, 300)}${result.result.length > 300 ? '...' : ''}`)
-        load() // Reload to show updated status
+        setExecuteMsg({ id: card.id, text: '✅ Schildi hat den Task bearbeitet!', type: 'success' })
+        load()
+        setTimeout(() => setExecuteMsg(null), 4000)
       } else {
-        alert('Fehler beim Ausführen: ' + result.error)
+        setExecuteMsg({ id: card.id, text: '❌ Fehler: ' + result.error, type: 'error' })
+        setTimeout(() => setExecuteMsg(null), 5000)
       }
     } catch (e) {
-      alert('Verbindungsfehler: ' + e.message)
+      setExecuteMsg({ id: card.id, text: '❌ Verbindungsfehler: ' + e.message, type: 'error' })
+      setTimeout(() => setExecuteMsg(null), 5000)
     }
     setExecuting(null)
   }
@@ -192,6 +199,17 @@ export default function KanbanBoard(props = {}) {
 
   return (
     <div>
+      {/* Toast notification */}
+      {executeMsg && (
+        <div className={`fixed top-4 right-4 z-[60] px-4 py-3 rounded-lg shadow-lg border max-w-sm animate-pulse ${
+          executeMsg.type === 'loading' ? 'bg-blue-900/90 border-blue-700 text-blue-200' :
+          executeMsg.type === 'success' ? 'bg-emerald-900/90 border-emerald-700 text-emerald-200' :
+          'bg-red-900/90 border-red-700 text-red-200'
+        }`}>
+          <p className="text-sm font-medium">{executeMsg.text}</p>
+        </div>
+      )}
+
       {/* Edit card modal */}
       {editCard && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditCard(null)}>
@@ -218,10 +236,11 @@ export default function KanbanBoard(props = {}) {
             <div className="flex gap-2">
               <button onClick={handleUpdate} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Speichern</button>
               <button onClick={() => handleExecute(editCard)} disabled={executing === editCard.id || editCard.on_hold}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors">
-                {executing === editCard.id ? '⏳ ...' : '🐢 Schildi ausführen'}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+                title="Task wird von Schildi bearbeitet. Dialog schließt automatisch.">
+                {executing === editCard.id ? '⏳ Schildi arbeitet...' : '🐢 Jetzt ausführen'}
               </button>
-              <button onClick={() => setEditCard(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Abbrechen</button>
+              <button onClick={() => setEditCard(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Schließen</button>
             </div>
           </div>
         </div>
