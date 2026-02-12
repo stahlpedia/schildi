@@ -118,7 +118,7 @@ function NewPageModal({ onSave, onClose }) {
   )
 }
 
-export default function Pages() {
+export default function Pages(props = {}) {
   const [domains, setDomains] = useState([])
   const [selectedDomain, setSelectedDomain] = useState(null)
   const [pageList, setPageList] = useState([])
@@ -270,7 +270,7 @@ export default function Pages() {
       // Find the Pages board to file the task there
       const allBoards = await boards.list()
       const pagesBoard = allBoards.find(b => b.slug === 'pages')
-      await kanban.create({
+      const newTask = await kanban.create({
         title: `Page Update: ${pageTitle || pageData.slug}`,
         description: `**AI-Prompt:**\n${aiPrompt}\n\n**Domain:** ${domainName}\n**Page:** /${pageData.slug}`,
         column_name: 'backlog',
@@ -278,6 +278,12 @@ export default function Pages() {
         board_id: pagesBoard ? pagesBoard.id : undefined,
       })
       setTaskSuccess(true)
+      // Navigate to Kanban board and highlight the new task
+      if (props.onNavigateToKanban && newTask.id) {
+        setTimeout(() => {
+          props.onNavigateToKanban(newTask.id, pagesBoard?.id)
+        }, 1500)
+      }
       setTimeout(() => setTaskSuccess(false), 3000)
     } catch (e) { setError(e.message) }
     setTaskCreating(false)

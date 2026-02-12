@@ -2,6 +2,9 @@ const { Router } = require('express');
 const db = require('../db');
 const { authenticate } = require('../auth');
 
+const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://openclaw:18789';
+const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
+
 const router = Router();
 router.use(authenticate);
 
@@ -144,43 +147,46 @@ router.put('/cards/reorder', (req, res) => {
 });
 
 router.post('/tasks', (req, res) => {
-  const { title, description = '', status = 'backlog', labels = [], board_id } = req.body;
+  const { title, description = '', status = 'backlog', labels = [], board_id, due_date, on_hold = 0 } = req.body;
   if (!title) return res.status(400).json({ error: 'Titel erforderlich' });
   const maxPos = board_id 
     ? db.prepare('SELECT COALESCE(MAX(position),0) as m FROM cards WHERE column_name = ? AND board_id = ?').get(status, board_id)
     : db.prepare('SELECT COALESCE(MAX(position),0) as m FROM cards WHERE column_name = ?').get(status);
   const result = db.prepare(
-    'INSERT INTO cards (title, description, column_name, labels, position, board_id) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(title, description, status, JSON.stringify(labels), (maxPos?.m || 0) + 1, board_id || null);
+    'INSERT INTO cards (title, description, column_name, labels, position, board_id, due_date, on_hold) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(title, description, status, JSON.stringify(labels), (maxPos?.m || 0) + 1, board_id || null, due_date || null, on_hold || 0);
   const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json({ ...card, labels: JSON.parse(card.labels), status: card.column_name });
 });
 
 router.post('/cards', (req, res) => {
-  const { title, description = '', column_name = 'backlog', labels = [], board_id } = req.body;
+  const { title, description = '', column_name = 'backlog', labels = [], board_id, due_date, on_hold = 0 } = req.body;
   if (!title) return res.status(400).json({ error: 'Titel erforderlich' });
   const maxPos = board_id 
     ? db.prepare('SELECT COALESCE(MAX(position),0) as m FROM cards WHERE column_name = ? AND board_id = ?').get(column_name, board_id)
     : db.prepare('SELECT COALESCE(MAX(position),0) as m FROM cards WHERE column_name = ?').get(column_name);
   const result = db.prepare(
-    'INSERT INTO cards (title, description, column_name, labels, position, board_id) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(title, description, column_name, JSON.stringify(labels), (maxPos?.m || 0) + 1, board_id || null);
+    'INSERT INTO cards (title, description, column_name, labels, position, board_id, due_date, on_hold) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(title, description, column_name, JSON.stringify(labels), (maxPos?.m || 0) + 1, board_id || null, due_date || null, on_hold || 0);
   const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json({ ...card, labels: JSON.parse(card.labels) });
 });
 
 router.put('/cards/:id', (req, res) => {
-  const { title, description, column_name, labels, position } = req.body;
+  const { title, description, column_name, labels, position, due_date, on_hold, result } = req.body;
   const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(req.params.id);
   if (!card) return res.status(404).json({ error: 'Nicht gefunden' });
 
-  db.prepare(`UPDATE cards SET title=?, description=?, column_name=?, labels=?, position=?, updated_at=datetime('now') WHERE id=?`)
+  db.prepare(`UPDATE cards SET title=?, description=?, column_name=?, labels=?, position=?, due_date=?, on_hold=?, result=?, updated_at=datetime('now') WHERE id=?`)
     .run(
       title ?? card.title,
       description ?? card.description,
       column_name ?? card.column_name,
       JSON.stringify(labels ?? JSON.parse(card.labels)),
       position ?? card.position,
+      due_date ?? card.due_date,
+      on_hold ?? card.on_hold,
+      result ?? card.result,
       req.params.id
     );
   const updated = db.prepare('SELECT * FROM cards WHERE id = ?').get(req.params.id);
@@ -190,6 +196,63 @@ router.put('/cards/:id', (req, res) => {
 router.delete('/cards/:id', (req, res) => {
   db.prepare('DELETE FROM cards WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// Execute task via OpenClaw
+router.post('/tasks/:id/execute', async (req, res) => {
+  const task = db.prepare('SELECT * FROM cards WHERE id = ?').get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task nicht gefunden' });
+
+  // Don't execute if task is on hold
+  if (task.on_hold) {
+    return res.status(400).json({ error: 'Task ist auf "On Hold" gesetzt' });
+  }
+
+  if (!OPENCLAW_TOKEN) {
+    return res.status(500).json({ error: 'OpenClaw Token nicht konfiguriert' });
+  }
+
+  try {
+    const response = await fetch(`${OPENCLAW_URL}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENCLAW_TOKEN}`,
+        'Content-Type': 'application/json',
+        'x-openclaw-agent-id': 'main'
+      },
+      body: JSON.stringify({
+        model: 'openclaw:main',
+        messages: [{
+          role: 'user',
+          content: `Bearbeite diesen Task:\n\nTitle: ${task.title}\nDescription: ${task.description}\n\nFühre die beschriebene Aufgabe aus.`
+        }],
+        user: `schildi-dashboard-task-${task.id}`
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(500).json({ error: `OpenClaw Fehler: ${response.status} - ${errorText}` });
+    }
+
+    const data = await response.json();
+    const result = data.choices?.[0]?.message?.content || 'Keine Antwort erhalten';
+
+    // Save result and move task to in-progress if it's in backlog
+    const newColumn = task.column_name === 'backlog' ? 'in-progress' : task.column_name;
+    db.prepare(`UPDATE cards SET result=?, column_name=?, updated_at=datetime('now') WHERE id=?`)
+      .run(result, newColumn, req.params.id);
+
+    res.json({ 
+      success: true, 
+      result, 
+      movedTo: newColumn !== task.column_name ? newColumn : null 
+    });
+
+  } catch (error) {
+    console.error('Execute task error:', error);
+    res.status(500).json({ error: `Verbindungsfehler: ${error.message}` });
+  }
 });
 
 module.exports = router;

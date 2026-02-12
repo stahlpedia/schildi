@@ -205,4 +205,25 @@ if (defaultChannel) {
   db.prepare('UPDATE conversations SET channel_id = ? WHERE channel_id IS NULL').run(defaultChannel.id);
 }
 
+// Migrate: add due_date column to cards if missing
+try {
+  db.prepare('SELECT due_date FROM cards LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE cards ADD COLUMN due_date TEXT');
+}
+
+// Migrate: add on_hold column to cards if missing
+try {
+  db.prepare('SELECT on_hold FROM cards LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE cards ADD COLUMN on_hold INTEGER DEFAULT 0');
+}
+
+// Migrate: add result column to cards if missing (for execute results)
+try {
+  db.prepare('SELECT result FROM cards LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE cards ADD COLUMN result TEXT');
+}
+
 module.exports = db;

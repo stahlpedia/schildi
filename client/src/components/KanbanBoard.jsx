@@ -6,7 +6,7 @@ const DEFAULT_COLORS = [
   'border-blue-500', 'border-purple-500', 'border-red-500', 'border-orange-500'
 ]
 
-export default function KanbanBoard() {
+export default function KanbanBoard(props = {}) {
   const [cards, setCards] = useState([])
   const [cols, setCols] = useState([])
   const [boardsList, setBoardsList] = useState([])
@@ -16,6 +16,9 @@ export default function KanbanBoard() {
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
   const [labels, setLabels] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [onHold, setOnHold] = useState(false)
+  const [executing, setExecuting] = useState(null)
   const [showColManager, setShowColManager] = useState(false)
   const [newColLabel, setNewColLabel] = useState('')
   const [newColColor, setNewColColor] = useState('border-gray-600')
@@ -43,18 +46,53 @@ export default function KanbanBoard() {
 
   useEffect(() => { loadBoards() }, [])
   useEffect(() => { if (selectedBoard) load() }, [selectedBoard])
+  
+  // Handle navigation from Pages component
+  useEffect(() => {
+    if (props.selectedBoardId && !selectedBoard) {
+      setSelectedBoard(props.selectedBoardId)
+    }
+  }, [props.selectedBoardId])
+
+  // Handle task highlighting
+  useEffect(() => {
+    if (props.highlightTaskId && cards.length > 0) {
+      const highlightedCard = cards.find(c => c.id === props.highlightTaskId)
+      if (highlightedCard) {
+        // Auto-open the edit dialog for the highlighted task
+        setTimeout(() => {
+          startEdit(highlightedCard)
+          if (props.onTaskHighlighted) props.onTaskHighlighted()
+        }, 500)
+      }
+    }
+  }, [props.highlightTaskId, cards])
 
   // Card CRUD
   const handleCreate = async (colName) => {
     if (!title.trim() || !selectedBoard) return
-    await kanban.create({ title, description: desc, column_name: colName, labels: labels ? labels.split(',').map(l => l.trim()) : [], board_id: selectedBoard })
-    setTitle(''); setDesc(''); setLabels(''); setShowForm(null); load()
+    await kanban.create({ 
+      title, 
+      description: desc, 
+      column_name: colName, 
+      labels: labels ? labels.split(',').map(l => l.trim()) : [], 
+      board_id: selectedBoard,
+      due_date: dueDate || null,
+      on_hold: onHold ? 1 : 0
+    })
+    setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false); setShowForm(null); load()
   }
 
   const handleUpdate = async () => {
     if (!editCard) return
-    await kanban.update(editCard.id, { title, description: desc, labels: labels ? labels.split(',').map(l => l.trim()) : [] })
-    setEditCard(null); setTitle(''); setDesc(''); setLabels(''); load()
+    await kanban.update(editCard.id, { 
+      title, 
+      description: desc, 
+      labels: labels ? labels.split(',').map(l => l.trim()) : [],
+      due_date: dueDate || null,
+      on_hold: onHold ? 1 : 0
+    })
+    setEditCard(null); setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false); load()
   }
 
   const handleDelete = async (id) => {
@@ -74,7 +112,12 @@ export default function KanbanBoard() {
   }
 
   const startEdit = (card) => {
-    setEditCard(card); setTitle(card.title); setDesc(card.description); setLabels((card.labels || []).join(', '))
+    setEditCard(card); 
+    setTitle(card.title); 
+    setDesc(card.description); 
+    setLabels((card.labels || []).join(', '));
+    setDueDate(card.due_date || '');
+    setOnHold(card.on_hold === 1);
   }
 
   // Column management
@@ -114,6 +157,30 @@ export default function KanbanBoard() {
     await columnsApi.remove(id); load()
   }
 
+  const handleExecute = async (card) => {
+    if (executing === card.id) return
+    setExecuting(card.id)
+    try {
+      const response = await fetch(`/api/kanban/tasks/${card.id}/execute`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      const result = await response.json()
+      if (response.ok) {
+        alert(`🐢 Schildi hat den Task bearbeitet!\n\n${result.result.substring(0, 300)}${result.result.length > 300 ? '...' : ''}`)
+        load() // Reload to show updated status
+      } else {
+        alert('Fehler beim Ausführen: ' + result.error)
+      }
+    } catch (e) {
+      alert('Verbindungsfehler: ' + e.message)
+    }
+    setExecuting(null)
+  }
+
   const colCards = (colName) => cards.filter(c => c.column_name === colName)
 
   const colorClass = (color) => {
@@ -135,9 +202,25 @@ export default function KanbanBoard() {
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Beschreibung" rows={3}
               className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
             <input value={labels} onChange={e => setLabels(e.target.value)} placeholder="Labels (kommagetrennt)"
-              className="w-full mb-4 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
+              className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
+            <div className="flex gap-3 mb-3">
+              <div className="flex-1">
+                <label className="text-xs text-gray-400 block mb-1">Fälligkeitsdatum</label>
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={onHold} onChange={e => setOnHold(e.target.checked)}
+                  className="rounded bg-gray-800 border-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-900" />
+                <label className="text-sm text-gray-300">On Hold</label>
+              </div>
+            </div>
             <div className="flex gap-2">
               <button onClick={handleUpdate} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Speichern</button>
+              <button onClick={() => handleExecute(editCard)} disabled={executing === editCard.id || editCard.on_hold}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors">
+                {executing === editCard.id ? '⏳ ...' : '🐢 Schildi ausführen'}
+              </button>
               <button onClick={() => setEditCard(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Abbrechen</button>
             </div>
           </div>
@@ -242,7 +325,7 @@ export default function KanbanBoard() {
             onDragOver={onDragOver} onDrop={e => onDrop(e, col.name)}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-lg">{col.label} <span className="text-gray-500 text-sm ml-1">{colCards(col.name).length}</span></h2>
-              <button onClick={() => { setShowForm(showForm === col.name ? null : col.name); setTitle(''); setDesc(''); setLabels('') }}
+              <button onClick={() => { setShowForm(showForm === col.name ? null : col.name); setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false) }}
                 className="text-gray-500 hover:text-emerald-400 text-xl transition-colors">+</button>
             </div>
 
@@ -254,6 +337,15 @@ export default function KanbanBoard() {
                   className="w-full mb-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
                 <input value={labels} onChange={e => setLabels(e.target.value)} placeholder="Labels (kommagetrennt)"
                   className="w-full mb-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
+                <div className="flex gap-2 mb-2">
+                  <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} placeholder="Fällig am"
+                    className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-white focus:outline-none focus:border-emerald-500" />
+                  <label className="flex items-center gap-1 text-xs text-gray-300">
+                    <input type="checkbox" checked={onHold} onChange={e => setOnHold(e.target.checked)}
+                      className="rounded bg-gray-700 border-gray-600 text-yellow-500" />
+                    On Hold
+                  </label>
+                </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleCreate(col.name)} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-sm transition-colors">Erstellen</button>
                   <button onClick={() => setShowForm(null)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors">×</button>
@@ -264,20 +356,40 @@ export default function KanbanBoard() {
             <div className="space-y-3">
               {colCards(col.name).map(card => (
                 <div key={card.id} draggable onDragStart={e => onDragStart(e, card)}
-                  className="bg-gray-800 p-3 rounded-lg border border-gray-700 cursor-grab hover:border-gray-600 transition-colors group">
+                  className={`bg-gray-800 p-3 rounded-lg border cursor-grab hover:border-gray-600 transition-colors group ${
+                    card.on_hold ? 'border-yellow-500/50 bg-gray-800/50' : 'border-gray-700'
+                  }`}>
                   <div className="flex justify-between items-start">
-                    <h3 className="font-medium text-sm">{card.title}</h3>
+                    <h3 className="font-medium text-sm flex items-center gap-2">
+                      {card.title}
+                      {card.on_hold && <span className="text-yellow-500 text-xs">⏸️</span>}
+                    </h3>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleExecute(card)} disabled={executing === card.id || card.on_hold}
+                        className="text-gray-500 hover:text-blue-400 disabled:opacity-40 text-xs" title="🐢 Schildi ausführen">
+                        {executing === card.id ? '⏳' : '🐢'}
+                      </button>
                       <button onClick={() => startEdit(card)} className="text-gray-500 hover:text-blue-400 text-xs">✏️</button>
                       <button onClick={() => handleDelete(card.id)} className="text-gray-500 hover:text-red-400 text-xs">🗑️</button>
                     </div>
                   </div>
                   {card.description && <p className="text-gray-400 text-xs mt-1">{card.description}</p>}
+                  {card.due_date && (
+                    <p className="text-orange-400 text-xs mt-1 flex items-center gap-1">
+                      📅 {new Date(card.due_date).toLocaleDateString('de-DE')}
+                    </p>
+                  )}
                   {card.labels?.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {card.labels.map((l, i) => (
                         <span key={i} className="px-2 py-0.5 bg-emerald-900/50 text-emerald-300 text-xs rounded-full">{l}</span>
                       ))}
+                    </div>
+                  )}
+                  {card.result && (
+                    <div className="mt-2 p-2 bg-blue-900/30 border border-blue-700/50 rounded text-xs">
+                      <div className="text-blue-400 font-medium mb-1">🐢 Schildi Ergebnis:</div>
+                      <div className="text-blue-200 line-clamp-3">{card.result}</div>
                     </div>
                   )}
                 </div>

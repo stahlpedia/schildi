@@ -13,6 +13,8 @@ export default function App() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn())
   const [tab, setTab] = useState('Kanban')
   const [unansweredCount, setUnansweredCount] = useState(0)
+  const [highlightTaskId, setHighlightTaskId] = useState(null)
+  const [selectedBoardId, setSelectedBoardId] = useState(null)
 
   const checkUnanswered = async () => {
     try {
@@ -32,6 +34,12 @@ export default function App() {
   useEffect(() => {
     if (tab === 'Channels') checkUnanswered()
   }, [tab])
+
+  const handleNavigateToKanban = (taskId, boardId) => {
+    setHighlightTaskId(taskId)
+    setSelectedBoardId(boardId)
+    setTab('Kanban')
+  }
 
   if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />
 
@@ -63,11 +71,13 @@ export default function App() {
         </div>
       </header>
       <main className="p-6">
-        <div style={{ display: tab === 'Kanban' ? 'block' : 'none' }}><KanbanBoard /></div>
+        <div style={{ display: tab === 'Kanban' ? 'block' : 'none' }}>
+          <KanbanBoard highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
+        </div>
         <div style={{ display: tab === 'Memory' ? 'block' : 'none' }}><MemoryViewer /></div>
         <div style={{ display: tab === 'Logbuch' ? 'block' : 'none' }}><Logbuch /></div>
         <div style={{ display: tab === 'Channels' ? 'block' : 'none' }}><Channel onUpdate={checkUnanswered} /></div>
-        <div style={{ display: tab === 'Pages' ? 'block' : 'none' }}><Pages /></div>
+        <div style={{ display: tab === 'Pages' ? 'block' : 'none' }}><Pages onNavigateToKanban={handleNavigateToKanban} /></div>
       </main>
     </div>
   )
