@@ -107,6 +107,7 @@ function NewPageModal({ onSave, onClose }) {
             className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500">
             <option value="landing">Landing Page</option>
             <option value="slides">Slides</option>
+            <option value="funnel">Funnel</option>
           </select>
         </div>
         <div className="flex gap-2 justify-end">
@@ -135,8 +136,65 @@ export default function Pages(props = {}) {
   const [pageTitle, setPageTitle] = useState('')
   const [aiPrompt, setAiPrompt] = useState('')
   const cmRef = useRef(null)
+  
+  // Funnel-specific states
+  const [funnelSteps, setFunnelSteps] = useState([])
+  const [selectedStep, setSelectedStep] = useState(0)
+  const funnelCmRef = useRef(null)
 
-  const { loaded: cmLoaded } = useCodeMirror(cmRef, editorContent, setEditorContent, !!pageData)
+  const { loaded: cmLoaded } = useCodeMirror(cmRef, editorContent, setEditorContent, !!pageData && pageData.type !== 'funnel')
+  const { loaded: funnelCmLoaded } = useCodeMirror(funnelCmRef, funnelSteps[selectedStep]?.content || '', 
+    (value) => {
+      if (funnelSteps[selectedStep]) {
+        const newSteps = [...funnelSteps]
+        newSteps[selectedStep] = { ...newSteps[selectedStep], content: value }
+        setFunnelSteps(newSteps)
+      }
+    }, 
+    !!pageData && pageData.type === 'funnel' && selectedStep < funnelSteps.length)
+
+  // Funnel helpers
+  const addFunnelStep = () => {
+    const newStep = {
+      step: funnelSteps.length + 1,
+      title: `Step ${funnelSteps.length + 1}`,
+      content: "",
+      cta: "Weiter →",
+      fields: []
+    }
+    setFunnelSteps([...funnelSteps, newStep])
+    setSelectedStep(funnelSteps.length)
+  }
+
+  const deleteFunnelStep = (index) => {
+    if (funnelSteps.length <= 1 || !confirm('Step wirklich löschen?')) return
+    const newSteps = funnelSteps.filter((_, i) => i !== index)
+    // Re-number steps
+    const renumbered = newSteps.map((step, i) => ({ ...step, step: i + 1 }))
+    setFunnelSteps(renumbered)
+    // Adjust selected step
+    if (selectedStep >= newSteps.length) {
+      setSelectedStep(Math.max(0, newSteps.length - 1))
+    } else if (selectedStep > index) {
+      setSelectedStep(selectedStep - 1)
+    }
+  }
+
+  const updateFunnelStepMeta = (field, value) => {
+    if (funnelSteps[selectedStep]) {
+      const newSteps = [...funnelSteps]
+      if (field === 'fields' && typeof value === 'string') {
+        // Parse comma-separated fields
+        newSteps[selectedStep] = { 
+          ...newSteps[selectedStep], 
+          fields: value.split(',').map(s => s.trim()).filter(Boolean) 
+        }
+      } else {
+        newSteps[selectedStep] = { ...newSteps[selectedStep], [field]: value }
+      }
+      setFunnelSteps(newSteps)
+    }
+  }
 
   const loadDomains = async () => {
     try {
@@ -163,8 +221,19 @@ export default function Pages(props = {}) {
       setMetaTitle(data.seo_title || data.meta?.title || '')
       setMetaDesc(data.seo_description || data.meta?.description || '')
       setAiPrompt(data.ai_prompt || '')
-      // Content: for landing pages with sections array, serialize to HTML; for slides, use content directly
-      if (data.type === 'landing' && Array.isArray(data.content)) {
+      // Content: handle different types
+      if (data.type === 'funnel') {
+        // Funnel content is an array of steps
+        if (Array.isArray(data.content) && data.content.length > 0) {
+          setFunnelSteps(data.content)
+          setSelectedStep(0)
+        } else {
+          // Initialize with default step for new funnel
+          const defaultStep = { step: 1, title: "Willkommen", content: "", cta: "Weiter →", fields: [] }
+          setFunnelSteps([defaultStep])
+          setSelectedStep(0)
+        }
+      } else if (data.type === 'landing' && Array.isArray(data.content)) {
         setEditorContent(data.content.map(s => `<!-- section: ${s.type || 'default'} -->\n${s.content || ''}`).join('\n\n'))
       } else if (typeof data.content === 'string') {
         setEditorContent(data.content)
@@ -213,8 +282,12 @@ export default function Pages(props = {}) {
     setSaving(true)
     try {
       let content = editorContent
+      // For funnel pages, use steps array
+      if (pageData.type === 'funnel') {
+        content = funnelSteps
+      }
       // For landing pages, try to parse sections back
-      if (pageData.type === 'landing') {
+      else if (pageData.type === 'landing') {
         const sections = editorContent.split(/<!-- section: (\w+) -->\n?/).filter(Boolean)
         if (sections.length >= 2) {
           const parsed = []
@@ -394,9 +467,86 @@ export default function Pages(props = {}) {
                 </div>
               </div>
 
-              {/* CodeMirror Editor */}
-              <div className="flex-1 min-h-0 overflow-hidden" ref={cmRef}>
-                {!cmLoaded && <div className="flex items-center justify-center h-full text-gray-500 text-sm">Editor wird geladen...</div>}
+              {/* Editor - conditional based on page type */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                {pageData.type === 'funnel' ? (
+                  /* Funnel Editor */
+                  <div className="flex h-full">
+                    {/* Left: Step List */}
+                    <div className="w-64 shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
+                      <div className="p-3 border-b border-gray-800 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-300">Steps</span>
+                        <button onClick={addFunnelStep}
+                          className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium transition-colors">+ Step</button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto">
+                        {funnelSteps.map((step, index) => (
+                          <div key={index} onClick={() => setSelectedStep(index)}
+                            className={`px-3 py-3 cursor-pointer border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors group ${selectedStep === index ? 'bg-gray-800 border-l-2 border-emerald-500' : ''}`}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center text-xs text-white font-semibold">
+                                {step.step}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs text-white truncate font-medium">{step.title}</div>
+                                <div className="text-[10px] text-gray-500 truncate">{step.cta}</div>
+                              </div>
+                              {funnelSteps.length > 1 && (
+                                <button onClick={(e) => { e.stopPropagation(); deleteFunnelStep(index) }}
+                                  className="opacity-0 group-hover:opacity-100 w-5 h-5 bg-red-600 hover:bg-red-500 rounded text-xs text-white transition-all">✕</button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {funnelSteps.length === 0 && <p className="text-gray-500 text-center py-6 text-xs">Keine Steps</p>}
+                      </div>
+                    </div>
+
+                    {/* Right: Step Editor */}
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                      {selectedStep < funnelSteps.length && funnelSteps[selectedStep] ? (
+                        <>
+                          {/* Step Meta Fields */}
+                          <div className="p-4 border-b border-gray-800 space-y-3">
+                            <div>
+                              <label className="text-[10px] text-gray-500 uppercase tracking-wide">Step Titel</label>
+                              <input value={funnelSteps[selectedStep].title} 
+                                onChange={e => updateFunnelStepMeta('title', e.target.value)}
+                                className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
+                            </div>
+                            <div className="flex gap-3">
+                              <div className="flex-1">
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wide">CTA Text</label>
+                                <input value={funnelSteps[selectedStep].cta} 
+                                  onChange={e => updateFunnelStepMeta('cta', e.target.value)}
+                                  className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
+                              </div>
+                              <div className="flex-1">
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wide">Formularfelder</label>
+                                <input value={funnelSteps[selectedStep].fields?.join(', ') || ''} 
+                                  placeholder="z.B. name, email, company"
+                                  onChange={e => updateFunnelStepMeta('fields', e.target.value)}
+                                  className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Step Content Editor */}
+                          <div className="flex-1 min-h-0 overflow-hidden" ref={funnelCmRef}>
+                            {!funnelCmLoaded && <div className="flex items-center justify-center h-full text-gray-500 text-sm">Editor wird geladen...</div>}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">Wähle einen Step oder füge einen neuen hinzu</div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Regular CodeMirror Editor */
+                  <div className="h-full" ref={cmRef}>
+                    {!cmLoaded && <div className="flex items-center justify-center h-full text-gray-500 text-sm">Editor wird geladen...</div>}
+                  </div>
+                )}
               </div>
 
               {/* Action buttons */}
