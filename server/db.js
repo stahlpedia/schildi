@@ -70,16 +70,6 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 
-  CREATE TABLE IF NOT EXISTS domains (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    host TEXT NOT NULL,
-    port INTEGER NOT NULL DEFAULT 3000,
-    api_key TEXT NOT NULL DEFAULT '',
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  );
-
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     conversation_id INTEGER NOT NULL,
@@ -96,13 +86,6 @@ try {
   db.prepare('SELECT agent_unread FROM conversations LIMIT 1').get();
 } catch {
   db.exec('ALTER TABLE conversations ADD COLUMN agent_unread INTEGER DEFAULT 0');
-}
-
-// Migrate: add public_url column to domains if missing
-try {
-  db.prepare('SELECT public_url FROM domains LIMIT 1').get();
-} catch {
-  db.exec("ALTER TABLE domains ADD COLUMN public_url TEXT DEFAULT ''");
 }
 
 // Migrate: add board_id column to columns if missing

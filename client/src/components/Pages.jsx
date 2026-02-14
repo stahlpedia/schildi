@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { pages, kanban, boards } from '../api'
+import { pages } from '../api'
 
 // Load CodeMirror from CDN
-function useCodeMirror(containerRef, value, onChange, active) {
+function useCodeMirror(containerRef, value, onChange, mode, active) {
   const editorRef = useRef(null)
   const [loaded, setLoaded] = useState(!!window.CodeMirror)
 
@@ -16,6 +16,9 @@ function useCodeMirror(containerRef, value, onChange, active) {
     themeCss.rel = 'stylesheet'
     themeCss.href = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/dracula.min.css'
     document.head.appendChild(themeCss)
+    const customCss = document.createElement('style')
+    customCss.innerHTML = `.CodeMirror { color: #FFFFFF !important; background-color: #282a36 !important; } .CodeMirror-gutters { background-color: #282a36 !important; } .CodeMirror-linenumber { color: #6D8A88 !important; }`
+    document.head.appendChild(customCss)
     const script = document.createElement('script')
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js'
     script.onload = () => {
@@ -38,19 +41,17 @@ function useCodeMirror(containerRef, value, onChange, active) {
     containerRef.current.innerHTML = ''
     containerRef.current.appendChild(ta)
     const cm = window.CodeMirror.fromTextArea(ta, {
-      mode: 'htmlmixed', theme: 'dracula', lineNumbers: true, lineWrapping: true,
+      mode: mode || 'htmlmixed', theme: 'dracula', lineNumbers: true, lineWrapping: true,
       tabSize: 2, indentWithTabs: false
     })
     cm.setValue(value || '')
     cm.on('change', () => onChange(cm.getValue()))
     cm.setSize('100%', '100%')
     editorRef.current = cm
-    // Force refresh after a tick to fix rendering
     setTimeout(() => cm.refresh(), 50)
     return () => { if (editorRef.current) { editorRef.current.toTextArea(); editorRef.current = null } }
-  }, [loaded, active])
+  }, [loaded, active, mode])
 
-  // Update value from outside without triggering onChange loop
   useEffect(() => {
     if (editorRef.current && editorRef.current.getValue() !== value) {
       editorRef.current.setValue(value || '')
@@ -60,309 +61,158 @@ function useCodeMirror(containerRef, value, onChange, active) {
   return { loaded }
 }
 
-function DomainModal({ domain, onSave, onClose }) {
-  const [form, setForm] = useState(domain || { name: '', host: '', port: 3000, api_key: '', public_url: '' })
-  const set = (k, v) => setForm({ ...form, [k]: v })
+function getMode(filename) {
+  const ext = (filename || '').split('.').pop().toLowerCase()
+  const map = { html: 'htmlmixed', htm: 'htmlmixed', css: 'css', js: 'javascript', json: 'application/json', xml: 'xml', svg: 'xml' }
+  return map[ext] || 'htmlmixed'
+}
+
+function getIcon(entry) {
+  if (entry.type === 'directory') return '📁'
+  const ext = (entry.name || '').split('.').pop().toLowerCase()
+  if (ext === 'html' || ext === 'htm') return '📄'
+  if (ext === 'css') return '🎨'
+  if (ext === 'js') return '⚡'
+  if (ext === 'json') return '📋'
+  return '📄'
+}
+
+function FileTree({ tree, selected, onSelect, depth = 0 }) {
+  const [expanded, setExpanded] = useState({})
+  const toggle = (p) => setExpanded(prev => ({ ...prev, [p]: !prev[p] }))
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-96 space-y-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-white">{domain ? 'Domain bearbeiten' : 'Neue Domain'}</h3>
-        {[['Name', 'name', 'text'], ['Host', 'host', 'text'], ['Port', 'port', 'number'], ['API Key', 'api_key', 'text'], ['Public URL', 'public_url', 'text']].map(([label, key, type]) => (
-          <div key={key}>
-            <label className="text-xs text-gray-400">{label}</label>
-            <input value={form[key] || ''} onChange={e => set(key, type === 'number' ? +e.target.value : e.target.value)} type={type}
-              placeholder={key === 'public_url' ? 'https://example.com (optional)' : ''}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
+    <div>
+      {tree.map(entry => (
+        <div key={entry.path}>
+          <div
+            onClick={() => entry.type === 'directory' ? toggle(entry.path) : onSelect(entry)}
+            className={`flex items-center gap-1.5 px-2 py-1 cursor-pointer text-xs hover:bg-gray-800/50 transition-colors ${selected === entry.path ? 'bg-gray-800 text-white' : 'text-gray-300'}`}
+            style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          >
+            {entry.type === 'directory' && <span className="text-[10px] text-gray-500">{expanded[entry.path] ? '▼' : '▶'}</span>}
+            <span>{getIcon(entry)}</span>
+            <span className="truncate">{entry.name}</span>
           </div>
-        ))}
-        <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Abbrechen</button>
-          <button onClick={() => onSave(form)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium">Speichern</button>
+          {entry.type === 'directory' && expanded[entry.path] && entry.children && (
+            <FileTree tree={entry.children} selected={selected} onSelect={onSelect} depth={depth + 1} />
+          )}
         </div>
-      </div>
+      ))}
     </div>
   )
 }
 
-function NewPageModal({ onSave, onClose }) {
-  const [form, setForm] = useState({ title: '', slug: '', type: 'landing' })
-  const set = (k, v) => setForm({ ...form, [k]: v })
+function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-96 space-y-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-white">Neue Page</h3>
-        <div>
-          <label className="text-xs text-gray-400">Titel</label>
-          <input value={form.title} onChange={e => set('title', e.target.value)}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
-        </div>
-        <div>
-          <label className="text-xs text-gray-400">Slug</label>
-          <input value={form.slug} onChange={e => set('slug', e.target.value)} placeholder="z.B. about-us"
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
-        </div>
-        <div>
-          <label className="text-xs text-gray-400">Typ</label>
-          <select value={form.type} onChange={e => set('type', e.target.value)}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500">
-            <option value="landing">Landing Page</option>
-            <option value="slides">Slides</option>
-            <option value="funnel">Funnel</option>
-          </select>
-        </div>
-        <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Abbrechen</button>
-          <button onClick={() => onSave(form)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium">Erstellen</button>
-        </div>
+        <h3 className="text-lg font-bold text-white">{title}</h3>
+        {children}
       </div>
     </div>
   )
 }
 
-export default function Pages(props = {}) {
+export default function Pages() {
   const [domains, setDomains] = useState([])
-  const [selectedDomain, setSelectedDomain] = useState(null)
-  const [pageList, setPageList] = useState([])
-  const [selectedPage, setSelectedPage] = useState(null)
-  const [pageData, setPageData] = useState(null)
-  const [showDomainModal, setShowDomainModal] = useState(false)
-  const [editDomain, setEditDomain] = useState(null)
-  const [showNewPage, setShowNewPage] = useState(false)
+  const [selectedDomain, setSelectedDomain] = useState('')
+  const [fileTree, setFileTree] = useState([])
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [fileContent, setFileContent] = useState('')
+  const [editorContent, setEditorContent] = useState('')
+  const [showNewDomain, setShowNewDomain] = useState(false)
+  const [showNewFile, setShowNewFile] = useState(false)
+  const [newDomainName, setNewDomainName] = useState('')
+  const [newFilePath, setNewFilePath] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-  const [editorContent, setEditorContent] = useState('')
-  const [metaTitle, setMetaTitle] = useState('')
-  const [metaDesc, setMetaDesc] = useState('')
-  const [pageTitle, setPageTitle] = useState('')
-  const [aiPrompt, setAiPrompt] = useState('')
   const cmRef = useRef(null)
-  
-  // Funnel-specific states
-  const [funnelSteps, setFunnelSteps] = useState([])
-  const [selectedStep, setSelectedStep] = useState(0)
-  const funnelCmRef = useRef(null)
 
-  const { loaded: cmLoaded } = useCodeMirror(cmRef, editorContent, setEditorContent, !!pageData && pageData.type !== 'funnel')
-  const { loaded: funnelCmLoaded } = useCodeMirror(funnelCmRef, funnelSteps[selectedStep]?.content || '', 
-    (value) => {
-      if (funnelSteps[selectedStep]) {
-        const newSteps = [...funnelSteps]
-        newSteps[selectedStep] = { ...newSteps[selectedStep], content: value }
-        setFunnelSteps(newSteps)
-      }
-    }, 
-    !!pageData && pageData.type === 'funnel' && selectedStep < funnelSteps.length)
-
-  // Funnel helpers
-  const addFunnelStep = () => {
-    const newStep = {
-      step: funnelSteps.length + 1,
-      title: `Step ${funnelSteps.length + 1}`,
-      content: "",
-      cta: "Weiter →",
-      fields: []
-    }
-    setFunnelSteps([...funnelSteps, newStep])
-    setSelectedStep(funnelSteps.length)
-  }
-
-  const deleteFunnelStep = (index) => {
-    if (funnelSteps.length <= 1 || !confirm('Step wirklich löschen?')) return
-    const newSteps = funnelSteps.filter((_, i) => i !== index)
-    // Re-number steps
-    const renumbered = newSteps.map((step, i) => ({ ...step, step: i + 1 }))
-    setFunnelSteps(renumbered)
-    // Adjust selected step
-    if (selectedStep >= newSteps.length) {
-      setSelectedStep(Math.max(0, newSteps.length - 1))
-    } else if (selectedStep > index) {
-      setSelectedStep(selectedStep - 1)
-    }
-  }
-
-  const updateFunnelStepMeta = (field, value) => {
-    if (funnelSteps[selectedStep]) {
-      const newSteps = [...funnelSteps]
-      if (field === 'fields' && typeof value === 'string') {
-        // Parse comma-separated fields
-        newSteps[selectedStep] = { 
-          ...newSteps[selectedStep], 
-          fields: value.split(',').map(s => s.trim()).filter(Boolean) 
-        }
-      } else {
-        newSteps[selectedStep] = { ...newSteps[selectedStep], [field]: value }
-      }
-      setFunnelSteps(newSteps)
-    }
-  }
+  const mode = selectedFile ? getMode(selectedFile.name) : 'htmlmixed'
+  const { loaded: cmLoaded } = useCodeMirror(cmRef, editorContent, setEditorContent, mode, !!selectedFile)
 
   const loadDomains = async () => {
     try {
       const list = await pages.domains()
       setDomains(list)
-      if (list.length > 0 && !selectedDomain) setSelectedDomain(list[0].id)
     } catch (e) { setError(e.message) }
   }
 
-  const loadPages = async (domainId) => {
-    if (!domainId) { setPageList([]); return }
+  const loadFiles = async (domain) => {
+    if (!domain) { setFileTree([]); return }
     try {
-      const list = await pages.listPages(domainId)
-      setPageList(Array.isArray(list) ? list : [])
-    } catch { setPageList([]); setError('Pages-Container nicht erreichbar') }
+      const tree = await pages.files(domain)
+      setFileTree(tree)
+    } catch (e) { setFileTree([]); setError(e.message) }
   }
 
-  const loadPage = async (slug) => {
-    if (!selectedDomain || !slug) return
+  const loadFile = async (entry) => {
+    if (!selectedDomain) return
     try {
-      const data = await pages.getPage(selectedDomain, slug)
-      setPageData(data)
-      setPageTitle(data.title || '')
-      setMetaTitle(data.seo_title || data.meta?.title || '')
-      setMetaDesc(data.seo_description || data.meta?.description || '')
-      setAiPrompt(data.ai_prompt || '')
-      // Content: handle different types
-      if (data.type === 'funnel') {
-        // Funnel content is an array of steps
-        if (Array.isArray(data.content) && data.content.length > 0) {
-          setFunnelSteps(data.content)
-          setSelectedStep(0)
-        } else {
-          // Initialize with default step for new funnel
-          const defaultStep = { step: 1, title: "Willkommen", content: "", cta: "Weiter →", fields: [] }
-          setFunnelSteps([defaultStep])
-          setSelectedStep(0)
-        }
-      } else if (data.type === 'landing' && Array.isArray(data.content)) {
-        setEditorContent(data.content.map(s => `<!-- section: ${s.type || 'default'} -->\n${s.content || ''}`).join('\n\n'))
-      } else if (typeof data.content === 'string') {
-        setEditorContent(data.content)
-      } else {
-        setEditorContent(JSON.stringify(data.content, null, 2))
-      }
+      const data = await pages.readFile(selectedDomain, entry.path)
+      setSelectedFile(entry)
+      setFileContent(data.content)
+      setEditorContent(data.content)
     } catch (e) { setError(e.message) }
   }
 
   useEffect(() => { loadDomains() }, [])
-  useEffect(() => { if (selectedDomain) loadPages(selectedDomain) }, [selectedDomain])
+  useEffect(() => { if (selectedDomain) { loadFiles(selectedDomain); setSelectedFile(null) } }, [selectedDomain])
 
-  const handleSaveDomain = async (form) => {
+  const handleCreateDomain = async () => {
+    if (!newDomainName.trim()) return
     try {
-      if (editDomain) {
-        await pages.updateDomain(editDomain.id, form)
-      } else {
-        await pages.createDomain(form)
-      }
-      setShowDomainModal(false)
-      setEditDomain(null)
-      loadDomains()
+      await pages.createDomain(newDomainName.trim())
+      setShowNewDomain(false)
+      setNewDomainName('')
+      await loadDomains()
+      setSelectedDomain(newDomainName.trim())
     } catch (e) { setError(e.message) }
   }
 
   const handleDeleteDomain = async () => {
-    if (!selectedDomain || !confirm('Domain wirklich löschen?')) return
-    await pages.deleteDomain(selectedDomain)
-    setSelectedDomain(null)
-    setPageList([])
-    setPageData(null)
-    loadDomains()
-  }
-
-  const handleCreatePage = async (form) => {
-    if (!selectedDomain) return
+    if (!selectedDomain || !confirm(`Domain "${selectedDomain}" wirklich löschen?`)) return
     try {
-      await pages.createPage(selectedDomain, form)
-      setShowNewPage(false)
-      loadPages(selectedDomain)
+      await pages.deleteDomain(selectedDomain)
+      setSelectedDomain('')
+      setFileTree([])
+      setSelectedFile(null)
+      loadDomains()
     } catch (e) { setError(e.message) }
   }
 
-  const handleSavePage = async () => {
-    if (!selectedDomain || !pageData) return
+  const handleCreateFile = async () => {
+    if (!selectedDomain || !newFilePath.trim()) return
+    try {
+      await pages.createFile(selectedDomain, newFilePath.trim(), '')
+      setShowNewFile(false)
+      setNewFilePath('')
+      loadFiles(selectedDomain)
+    } catch (e) { setError(e.message) }
+  }
+
+  const handleSaveFile = async () => {
+    if (!selectedDomain || !selectedFile) return
     setSaving(true)
     try {
-      let content = editorContent
-      // For funnel pages, use steps array
-      if (pageData.type === 'funnel') {
-        content = funnelSteps
-      }
-      // For landing pages, try to parse sections back
-      else if (pageData.type === 'landing') {
-        const sections = editorContent.split(/<!-- section: (\w+) -->\n?/).filter(Boolean)
-        if (sections.length >= 2) {
-          const parsed = []
-          for (let i = 0; i < sections.length; i += 2) {
-            parsed.push({ type: sections[i].trim(), content: (sections[i + 1] || '').trim() })
-          }
-          content = parsed
-        }
-      }
-      await pages.updatePage(selectedDomain, pageData.slug, {
-        title: pageTitle,
-        content,
-        meta: { title: metaTitle, description: metaDesc },
-        seo_title: metaTitle,
-        seo_description: metaDesc,
-        ai_prompt: aiPrompt,
-      })
+      await pages.updateFile(selectedDomain, selectedFile.path, editorContent)
+      setFileContent(editorContent)
       setError(null)
     } catch (e) { setError(e.message) }
     setSaving(false)
   }
 
-  const handleDeletePage = async () => {
-    if (!selectedDomain || !pageData || !confirm('Page wirklich löschen?')) return
-    await pages.deletePage(selectedDomain, pageData.slug)
-    setPageData(null)
-    setSelectedPage(null)
-    loadPages(selectedDomain)
-  }
-
-  const handlePreview = () => {
-    if (!pageData || !selectedDomain) return
-    const domain = domains.find(d => d.id === selectedDomain)
-    if (!domain) return
-    if (domain.public_url) {
-      let base = domain.public_url.replace(/\/+$/, '')
-      if (!/^https?:\/\//i.test(base)) base = `https://${base}`
-      window.open(`${base}/${pageData.slug}`, '_blank')
-    } else {
-      window.open(`http://${domain.host}:${domain.port}/${pageData.slug}`, '_blank')
-    }
-  }
-
-  const [taskCreating, setTaskCreating] = useState(false)
-  const [taskSuccess, setTaskSuccess] = useState(false)
-
-  const handleCreateTask = async () => {
-    if (!aiPrompt.trim() || !pageData) return
-    setTaskCreating(true)
+  const handleDeleteFile = async () => {
+    if (!selectedDomain || !selectedFile || !confirm(`"${selectedFile.path}" wirklich löschen?`)) return
     try {
-      const domain = domains.find(d => d.id === selectedDomain)
-      const domainName = domain ? (domain.public_url || domain.name) : 'unknown'
-      // Find the Pages board to file the task there
-      const allBoards = await boards.list()
-      const pagesBoard = allBoards.find(b => b.slug === 'pages')
-      const newTask = await kanban.create({
-        title: `Page Update: ${pageTitle || pageData.slug}`,
-        description: `**AI-Prompt:**\n${aiPrompt}\n\n**Domain:** ${domainName}\n**Page:** /${pageData.slug}`,
-        column_name: 'backlog',
-        labels: ['pages', 'ai-prompt'],
-        board_id: pagesBoard ? pagesBoard.id : undefined,
-      })
-      setTaskSuccess(true)
-      // Navigate to Kanban board and highlight the new task
-      if (props.onNavigateToKanban && newTask.id) {
-        setTimeout(() => {
-          props.onNavigateToKanban(newTask.id, pagesBoard?.id)
-        }, 1500)
-      }
-      setTimeout(() => setTaskSuccess(false), 3000)
+      await pages.deleteFile(selectedDomain, selectedFile.path)
+      setSelectedFile(null)
+      loadFiles(selectedDomain)
     } catch (e) { setError(e.message) }
-    setTaskCreating(false)
   }
 
-  const currentDomain = domains.find(d => d.id === selectedDomain)
+  const hasChanges = selectedFile && editorContent !== fileContent
 
   return (
     <div className="flex flex-col gap-4" style={{ height: 'calc(100vh - 120px)' }}>
@@ -373,205 +223,103 @@ export default function Pages(props = {}) {
         </div>
       )}
 
-      {/* Top bar: Domain selector */}
+      {/* Top bar */}
       <div className="flex items-center gap-3 bg-gray-900 rounded-xl border border-gray-800 px-4 py-3">
         <span className="text-lg">🌐</span>
-        <select value={selectedDomain || ''} onChange={e => { setSelectedDomain(+e.target.value); setPageData(null); setSelectedPage(null) }}
+        <select value={selectedDomain} onChange={e => setSelectedDomain(e.target.value)}
           className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500">
           <option value="">Domain wählen...</option>
-          {domains.map(d => <option key={d.id} value={d.id}>{d.name} ({d.public_url || `${d.host}:${d.port}`})</option>)}
+          {domains.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
         </select>
-        <button onClick={() => { setEditDomain(null); setShowDomainModal(true) }}
-          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Domain</button>
-        {currentDomain && (
-          <>
-            <button onClick={() => { setEditDomain(currentDomain); setShowDomainModal(true) }}
-              className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs transition-colors">✏️ Bearbeiten</button>
-            <button onClick={handleDeleteDomain}
-              className="px-3 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-xs transition-colors">🗑️ Löschen</button>
-          </>
+        <button onClick={() => setShowNewDomain(true)}
+          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Neue Domain</button>
+        {selectedDomain && (
+          <button onClick={handleDeleteDomain}
+            className="px-3 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-xs transition-colors">🗑️ Domain löschen</button>
         )}
       </div>
 
       {/* Main content */}
       <div className="flex gap-4 flex-1 min-h-0">
-        {/* Left sidebar: Page list */}
+        {/* Left sidebar: File tree */}
         <div className="w-64 shrink-0 bg-gray-900 rounded-xl border border-gray-800 flex flex-col overflow-hidden">
           <div className="p-3 border-b border-gray-800 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-300">Pages</span>
+            <span className="text-sm font-semibold text-gray-300">Dateien</span>
             {selectedDomain && (
-              <button onClick={() => setShowNewPage(true)} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium transition-colors">+ Neu</button>
+              <button onClick={() => setShowNewFile(true)} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium transition-colors">+ Neue Datei</button>
             )}
           </div>
           <div className="flex-1 overflow-y-auto">
-            {pageList.map(p => (
-              <div key={p.slug} onClick={() => { setSelectedPage(p.slug); loadPage(p.slug) }}
-                className={`px-3 py-2 cursor-pointer border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors ${selectedPage === p.slug ? 'bg-gray-800' : ''}`}>
-                <div className="text-xs text-white truncate">{p.title || p.slug}</div>
-                <div className="text-[10px] text-gray-500">/{p.slug} · {p.type || '?'}</div>
-              </div>
-            ))}
-            {selectedDomain && pageList.length === 0 && <p className="text-gray-500 text-center py-6 text-xs">Keine Pages</p>}
-            {!selectedDomain && <p className="text-gray-500 text-center py-6 text-xs">Domain wählen</p>}
+            {fileTree.length > 0 ? (
+              <FileTree tree={fileTree} selected={selectedFile?.path} onSelect={loadFile} />
+            ) : (
+              <p className="text-gray-500 text-center py-6 text-xs">
+                {selectedDomain ? 'Keine Dateien' : 'Domain wählen'}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Right: Editor */}
         <div className="flex-1 bg-gray-900 rounded-xl border border-gray-800 flex flex-col overflow-hidden">
-          {pageData ? (
+          {selectedFile ? (
             <>
-              {/* Meta fields */}
-              <div className="p-4 border-b border-gray-800 space-y-3">
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="text-[10px] text-gray-500 uppercase tracking-wide">Titel</label>
-                    <input value={pageTitle} onChange={e => setPageTitle(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                  </div>
-                  <div className="w-40">
-                    <label className="text-[10px] text-gray-500 uppercase tracking-wide">Slug</label>
-                    <input value={pageData.slug} readOnly
-                      className="w-full px-3 py-1.5 bg-gray-800/50 border border-gray-700/50 rounded text-sm text-gray-400" />
-                  </div>
-                  <div className="w-28">
-                    <label className="text-[10px] text-gray-500 uppercase tracking-wide">Typ</label>
-                    <input value={pageData.type || '?'} readOnly
-                      className="w-full px-3 py-1.5 bg-gray-800/50 border border-gray-700/50 rounded text-sm text-gray-400" />
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="text-[10px] text-gray-500 uppercase tracking-wide">SEO Title</label>
-                    <input value={metaTitle} onChange={e => setMetaTitle(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] text-gray-500 uppercase tracking-wide">SEO Description</label>
-                    <input value={metaDesc} onChange={e => setMetaDesc(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                  </div>
-                </div>
-                {/* AI Prompt */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] text-gray-500 uppercase tracking-wide">🤖 AI-Prompt</label>
-                    <button onClick={handleCreateTask} disabled={!aiPrompt.trim() || taskCreating}
-                      className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed rounded text-[10px] text-gray-300 transition-colors">
-                      {taskSuccess ? '✅ Task erstellt!' : taskCreating ? '⏳...' : '→ Kanban'}
-                    </button>
-                  </div>
-                  <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
-                    placeholder="Prompt für KI-Generierung dieser Page (z.B. 'Erstelle eine Landing Page für...')"
-                    rows={3}
-                    className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500 resize-y" />
-                </div>
+              <div className="p-3 border-b border-gray-800 flex items-center gap-2">
+                <span className="text-xs text-gray-500">{getIcon(selectedFile)}</span>
+                <span className="text-sm text-gray-300 font-mono">{selectedFile.path}</span>
+                {hasChanges && <span className="text-xs text-yellow-500">● ungespeichert</span>}
               </div>
-
-              {/* Editor - conditional based on page type */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                {pageData.type === 'funnel' ? (
-                  /* Funnel Editor */
-                  <div className="flex h-full">
-                    {/* Left: Step List */}
-                    <div className="w-64 shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
-                      <div className="p-3 border-b border-gray-800 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-gray-300">Steps</span>
-                        <button onClick={addFunnelStep}
-                          className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium transition-colors">+ Step</button>
-                      </div>
-                      <div className="flex-1 overflow-y-auto">
-                        {funnelSteps.map((step, index) => (
-                          <div key={index} onClick={() => setSelectedStep(index)}
-                            className={`px-3 py-3 cursor-pointer border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors group ${selectedStep === index ? 'bg-gray-800 border-l-2 border-emerald-500' : ''}`}>
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center text-xs text-white font-semibold">
-                                {step.step}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs text-white truncate font-medium">{step.title}</div>
-                                <div className="text-[10px] text-gray-500 truncate">{step.cta}</div>
-                              </div>
-                              {funnelSteps.length > 1 && (
-                                <button onClick={(e) => { e.stopPropagation(); deleteFunnelStep(index) }}
-                                  className="opacity-0 group-hover:opacity-100 w-5 h-5 bg-red-600 hover:bg-red-500 rounded text-xs text-white transition-all">✕</button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        {funnelSteps.length === 0 && <p className="text-gray-500 text-center py-6 text-xs">Keine Steps</p>}
-                      </div>
-                    </div>
-
-                    {/* Right: Step Editor */}
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                      {selectedStep < funnelSteps.length && funnelSteps[selectedStep] ? (
-                        <>
-                          {/* Step Meta Fields */}
-                          <div className="p-4 border-b border-gray-800 space-y-3">
-                            <div>
-                              <label className="text-[10px] text-gray-500 uppercase tracking-wide">Step Titel</label>
-                              <input value={funnelSteps[selectedStep].title} 
-                                onChange={e => updateFunnelStepMeta('title', e.target.value)}
-                                className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                            </div>
-                            <div className="flex gap-3">
-                              <div className="flex-1">
-                                <label className="text-[10px] text-gray-500 uppercase tracking-wide">CTA Text</label>
-                                <input value={funnelSteps[selectedStep].cta} 
-                                  onChange={e => updateFunnelStepMeta('cta', e.target.value)}
-                                  className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                              </div>
-                              <div className="flex-1">
-                                <label className="text-[10px] text-gray-500 uppercase tracking-wide">Formularfelder</label>
-                                <input value={funnelSteps[selectedStep].fields?.join(', ') || ''} 
-                                  placeholder="z.B. name, email, company"
-                                  onChange={e => updateFunnelStepMeta('fields', e.target.value)}
-                                  className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Step Content Editor */}
-                          <div className="flex-1 min-h-0 overflow-hidden" ref={funnelCmRef}>
-                            {!funnelCmLoaded && <div className="flex items-center justify-center h-full text-gray-500 text-sm">Editor wird geladen...</div>}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">Wähle einen Step oder füge einen neuen hinzu</div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  /* Regular CodeMirror Editor */
-                  <div className="h-full" ref={cmRef}>
-                    {!cmLoaded && <div className="flex items-center justify-center h-full text-gray-500 text-sm">Editor wird geladen...</div>}
-                  </div>
-                )}
+              <div className="flex-1 min-h-0 overflow-hidden" ref={cmRef}>
+                {!cmLoaded && <div className="flex items-center justify-center h-full text-gray-500 text-sm">Editor wird geladen...</div>}
               </div>
-
-              {/* Action buttons */}
               <div className="p-3 border-t border-gray-800 flex gap-2">
-                <button onClick={handleSavePage} disabled={saving}
+                <button onClick={handleSaveFile} disabled={saving}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
                   {saving ? 'Speichert...' : 'Speichern'}
                 </button>
-                <button onClick={handlePreview}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">👁️ Vorschau</button>
-                <button onClick={handleDeletePage}
-                  className="px-4 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-sm transition-colors ml-auto">🗑️ Löschen</button>
+                <button onClick={handleDeleteFile}
+                  className="px-4 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-sm transition-colors ml-auto">🗑️ Datei löschen</button>
               </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
-              {selectedDomain ? 'Wähle eine Page oder erstelle eine neue' : 'Wähle zuerst eine Domain'}
+              {selectedDomain ? 'Wähle eine Datei oder erstelle eine neue' : 'Wähle zuerst eine Domain'}
             </div>
           )}
         </div>
       </div>
 
-      {/* Modals */}
-      {showDomainModal && <DomainModal domain={editDomain} onSave={handleSaveDomain} onClose={() => { setShowDomainModal(false); setEditDomain(null) }} />}
-      {showNewPage && <NewPageModal onSave={handleCreatePage} onClose={() => setShowNewPage(false)} />}
+      {/* New Domain Modal */}
+      {showNewDomain && (
+        <Modal title="Neue Domain" onClose={() => setShowNewDomain(false)}>
+          <div>
+            <label className="text-xs text-gray-400">Domain-Name</label>
+            <input value={newDomainName} onChange={e => setNewDomainName(e.target.value)} placeholder="z.B. info.transloggpt.de"
+              onKeyDown={e => e.key === 'Enter' && handleCreateDomain()}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setShowNewDomain(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Abbrechen</button>
+            <button onClick={handleCreateDomain} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium">Erstellen</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* New File Modal */}
+      {showNewFile && (
+        <Modal title="Neue Datei" onClose={() => setShowNewFile(false)}>
+          <div>
+            <label className="text-xs text-gray-400">Dateipfad</label>
+            <input value={newFilePath} onChange={e => setNewFilePath(e.target.value)} placeholder="z.B. index.html oder css/style.css"
+              onKeyDown={e => e.key === 'Enter' && handleCreateFile()}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setShowNewFile(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Abbrechen</button>
+            <button onClick={handleCreateFile} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium">Erstellen</button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

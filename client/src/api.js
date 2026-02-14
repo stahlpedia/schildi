@@ -70,14 +70,13 @@ export const log = {
 
 export const pages = {
   domains: () => api('/pages/domains'),
-  createDomain: (data) => api('/pages/domains', { method: 'POST', body: JSON.stringify(data) }),
-  updateDomain: (id, data) => api(`/pages/domains/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteDomain: (id) => api(`/pages/domains/${id}`, { method: 'DELETE' }),
-  listPages: (domainId) => api(`/pages/domains/${domainId}/pages`),
-  createPage: (domainId, data) => api(`/pages/domains/${domainId}/pages`, { method: 'POST', body: JSON.stringify(data) }),
-  getPage: (domainId, slug) => api(`/pages/domains/${domainId}/pages/${slug}`),
-  updatePage: (domainId, slug, data) => api(`/pages/domains/${domainId}/pages/${slug}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deletePage: (domainId, slug) => api(`/pages/domains/${domainId}/pages/${slug}`, { method: 'DELETE' }),
+  createDomain: (name) => api('/pages/domains', { method: 'POST', body: JSON.stringify({ name }) }),
+  deleteDomain: (name) => api(`/pages/domains/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  files: (domain) => api(`/pages/domains/${encodeURIComponent(domain)}/files`),
+  readFile: (domain, path) => api(`/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(path)}`),
+  createFile: (domain, path, content) => api(`/pages/domains/${encodeURIComponent(domain)}/files`, { method: 'POST', body: JSON.stringify({ path, content }) }),
+  updateFile: (domain, filePath, content) => api(`/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(filePath)}`, { method: 'PUT', body: JSON.stringify({ content }) }),
+  deleteFile: (domain, path) => api(`/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(path)}`, { method: 'DELETE' }),
 };
 
 export const chatChannels = {
