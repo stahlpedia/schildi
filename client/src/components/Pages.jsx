@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { pages } from '../api'
+import CardModal from './CardModal'
 
 // Load CodeMirror from CDN
 function useCodeMirror(containerRef, value, onChange, mode, active) {
@@ -126,9 +127,7 @@ export default function Pages({ onNavigateToKanban }) {
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [newDomainName, setNewDomainName] = useState('')
   const [newFilePath, setNewFilePath] = useState('')
-  const [taskTitle, setTaskTitle] = useState('')
-  const [taskDescription, setTaskDescription] = useState('')
-  const [taskLabels, setTaskLabels] = useState('')
+  const [pagesBoardId, setPagesBoardId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -162,7 +161,22 @@ export default function Pages({ onNavigateToKanban }) {
     } catch (e) { setError(e.message) }
   }
 
-  useEffect(() => { loadDomains() }, [])
+  const loadPagesBoard = async () => {
+    try {
+      const response = await fetch('/api/kanban/boards', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      })
+      const boards = await response.json()
+      const pagesBoard = boards.find(b => b.slug === 'pages')
+      if (pagesBoard) {
+        setPagesBoardId(pagesBoard.id)
+      }
+    } catch (e) {
+      console.error('Failed to load Pages board:', e)
+    }
+  }
+
+  useEffect(() => { loadDomains(); loadPagesBoard() }, [])
   useEffect(() => { if (selectedDomain) { loadFiles(selectedDomain); setSelectedFile(null) } }, [selectedDomain])
 
   const handleCreateDomain = async () => {
@@ -225,54 +239,11 @@ export default function Pages({ onNavigateToKanban }) {
     }
   }
 
-  const handleCreateTask = async () => {
-    if (!taskTitle.trim()) return
-    try {
-      // Get Pages board ID from the API
-      const boardsResponse = await fetch('/api/kanban/boards', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      })
-      const boards = await boardsResponse.json()
-      const pagesBoard = boards.find(b => b.slug === 'pages')
-      
-      if (!pagesBoard) {
-        setError('Pages Board nicht gefunden')
-        return
-      }
-
-      // Create task in Pages board
-      const response = await fetch('/api/kanban/tasks', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          title: taskTitle,
-          description: taskDescription,
-          labels: taskLabels ? taskLabels.split(',').map(l => l.trim()) : [],
-          board_id: pagesBoard.id,
-          column_name: 'backlog'
-        })
-      })
-      
-      if (response.ok) {
-        const task = await response.json()
-        setShowCreateTask(false)
-        setTaskTitle('')
-        setTaskDescription('')
-        setTaskLabels('')
-        
-        // Navigate to Kanban with the new task highlighted
-        if (onNavigateToKanban) {
-          onNavigateToKanban(task.id, pagesBoard.id)
-        }
-      } else {
-        const result = await response.json()
-        setError('Task erstellen fehlgeschlagen: ' + result.error)
-      }
-    } catch (e) {
-      setError('Task erstellen fehlgeschlagen: ' + e.message)
+  const handleTaskSave = (task) => {
+    setShowCreateTask(false)
+    // Navigate to Kanban with the new task highlighted
+    if (onNavigateToKanban && task) {
+      onNavigateToKanban(task.id, pagesBoardId)
     }
   }
 
@@ -439,31 +410,15 @@ export default function Pages({ onNavigateToKanban }) {
       )}
 
       {/* Create Task Modal */}
-      {showCreateTask && (
-        <Modal title="Task für Pages erstellen" onClose={() => setShowCreateTask(false)}>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-gray-400">Titel</label>
-              <input value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="Task-Titel"
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" autoFocus />
-            </div>
-            <div>
-              <label className="text-xs text-gray-400">Beschreibung</label>
-              <textarea value={taskDescription} onChange={e => setTaskDescription(e.target.value)} placeholder="Beschreibung (optional)" rows={3}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-400">Labels (kommagetrennt)</label>
-              <input value={taskLabels} onChange={e => setTaskLabels(e.target.value)} placeholder="z.B. bug, feature, urgent"
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
-            </div>
-          </div>
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowCreateTask(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Abbrechen</button>
-            <button onClick={handleCreateTask} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">Task erstellen</button>
-          </div>
-        </Modal>
-      )}
+      <CardModal 
+        isOpen={showCreateTask}
+        onClose={() => setShowCreateTask(false)}
+        mode="create"
+        defaultBoardId={pagesBoardId}
+        defaultColumnName="backlog"
+        defaultTitle={selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, '') : ''}
+        onSave={handleTaskSave}
+      />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { kanban, columns as columnsApi, boards, attachments } from '../api'
+import { kanban, columns as columnsApi, boards } from '../api'
+import CardModal from './CardModal'
 
 const DEFAULT_COLORS = [
   'border-gray-600', 'border-yellow-500', 'border-emerald-500',
@@ -13,12 +14,6 @@ export default function KanbanBoard(props = {}) {
   const [selectedBoard, setSelectedBoard] = useState(null)
   const [createForColumn, setCreateForColumn] = useState(null)
   const [editCard, setEditCard] = useState(null)
-  const [title, setTitle] = useState('')
-  const [desc, setDesc] = useState('')
-  const [labels, setLabels] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const [onHold, setOnHold] = useState(false)
-  const [executeDirectly, setExecuteDirectly] = useState(false)
   const [executing, setExecuting] = useState(null)
   const [showColManager, setShowColManager] = useState(false)
   const [newColLabel, setNewColLabel] = useState('')
@@ -28,9 +23,6 @@ export default function KanbanBoard(props = {}) {
   const [editColColor, setEditColColor] = useState('')
   const [showBoardModal, setShowBoardModal] = useState(false)
   const [newBoardName, setNewBoardName] = useState('')
-  const [cardAttachments, setCardAttachments] = useState([])
-  const [pendingAttachments, setPendingAttachments] = useState([])
-  const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
   const dragItem = useRef(null)
 
@@ -74,41 +66,6 @@ export default function KanbanBoard(props = {}) {
   }, [props.highlightTaskId, cards])
 
   // Card CRUD
-  const handleCreate = async (colName) => {
-    if (!title.trim() || !selectedBoard) return
-    const response = await kanban.create({ 
-      title, 
-      description: desc, 
-      column_name: colName, 
-      labels: labels ? labels.split(',').map(l => l.trim()) : [], 
-      board_id: selectedBoard,
-      due_date: dueDate || null,
-      on_hold: onHold ? 1 : 0
-    })
-    
-    // Upload pending attachments if any
-    if (response?.id && pendingAttachments.length > 0) {
-      setUploading(true)
-      try {
-        for (const file of pendingAttachments) {
-          await attachments.upload(file, 'card', response.id)
-        }
-      } catch (e) {
-        alert('Einige Anhänge konnten nicht hochgeladen werden: ' + e.message)
-      }
-      setUploading(false)
-    }
-    
-    const shouldExecute = executeDirectly
-    setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false); setExecuteDirectly(false); 
-    setCreateForColumn(null); setPendingAttachments([]); setCardAttachments([])
-    load()
-    
-    // Auto-execute if requested
-    if (shouldExecute && response?.id) {
-      setTimeout(() => handleExecuteById(response.id), 500)
-    }
-  }
 
   const handleExecuteById = async (cardId) => {
     if (executing === cardId) return
@@ -138,27 +95,7 @@ export default function KanbanBoard(props = {}) {
     setExecuting(null)
   }
 
-  const handleUpdate = async () => {
-    if (!editCard) return
-    await kanban.update(editCard.id, { 
-      title, 
-      description: desc, 
-      labels: labels ? labels.split(',').map(l => l.trim()) : [],
-      due_date: dueDate || null,
-      on_hold: onHold ? 1 : 0
-    })
-    
-    const shouldExecute = executeDirectly
-    const cardId = editCard.id
-    setEditCard(null); setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false); setExecuteDirectly(false); 
-    setPendingAttachments([]); setCardAttachments([])
-    load()
-    
-    // Auto-execute if requested
-    if (shouldExecute) {
-      setTimeout(() => handleExecuteById(cardId), 500)
-    }
-  }
+  // handleUpdate now handled by CardModal
 
   const handleDelete = async (id) => {
     await kanban.remove(id); load()
@@ -176,90 +113,15 @@ export default function KanbanBoard(props = {}) {
     dragItem.current = null
   }
 
-  const startEdit = async (card) => {
-    setEditCard(card); 
-    setTitle(card.title); 
-    setDesc(card.description); 
-    setLabels((card.labels || []).join(', '));
-    setDueDate(card.due_date || '');
-    setOnHold(card.on_hold === 1);
-    setExecuteDirectly(false); // Reset execute directly checkbox
-    setPendingAttachments([]); // Clear pending attachments
-    
-    // Load attachments
-    try {
-      const attachmentsList = await attachments.list('card', card.id);
-      setCardAttachments(attachmentsList);
-    } catch (e) {
-      console.error('Failed to load attachments:', e);
-      setCardAttachments([]);
-    }
+  const startEdit = (card) => {
+    setEditCard(card)
   }
 
   const startCreate = (colName) => {
     setCreateForColumn(colName)
-    setTitle('')
-    setDesc('')
-    setLabels('')
-    setDueDate('')
-    setOnHold(false)
-    setExecuteDirectly(false)
-    setCardAttachments([])
-    setPendingAttachments([])
   }
 
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    // In create mode: add to pending attachments
-    if (createForColumn) {
-      setPendingAttachments(prev => [...prev, file]);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      return;
-    }
-
-    // In edit mode: upload immediately
-    if (!editCard) return;
-    setUploading(true);
-    try {
-      const attachment = await attachments.upload(file, 'card', editCard.id);
-      setCardAttachments(prev => [attachment, ...prev]);
-    } catch (e) {
-      alert('Upload fehlgeschlagen: ' + e.message);
-    }
-    setUploading(false);
-    
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleDeleteAttachment = async (attachmentId) => {
-    if (!confirm('Datei wirklich löschen?')) return;
-    
-    try {
-      await attachments.remove(attachmentId);
-      setCardAttachments(prev => prev.filter(a => a.id !== attachmentId));
-    } catch (e) {
-      alert('Löschen fehlgeschlagen: ' + e.message);
-    }
-  };
-
-  const handleDeletePendingAttachment = (index) => {
-    setPendingAttachments(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
+  // File upload functions now handled by CardModal
 
   // Column management
   const handleCreateCol = async () => {
@@ -362,132 +224,20 @@ export default function KanbanBoard(props = {}) {
         </div>
       )}
 
-      {/* Create/Edit card modal */}
-      {(editCard || createForColumn) && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 md:p-0" onClick={() => { setEditCard(null); setCreateForColumn(null) }}>
-          <div className="bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-700 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">{editCard ? 'Karte bearbeiten' : 'Neue Karte'}</h3>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titel"
-              className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
-            <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Beschreibung" rows={3}
-              className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
-            <input value={labels} onChange={e => setLabels(e.target.value)} placeholder="Labels (kommagetrennt)"
-              className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
-            <div className="flex gap-3 mb-3">
-              <div className="flex-1">
-                <label className="text-xs text-gray-400 block mb-1">Fälligkeitsdatum</label>
-                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={onHold} onChange={e => setOnHold(e.target.checked)}
-                    className="rounded bg-gray-800 border-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-900" />
-                  <label className="text-sm text-gray-300">On Hold</label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={executeDirectly} onChange={e => setExecuteDirectly(e.target.checked)}
-                    className="rounded bg-gray-800 border-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900" />
-                  <label className="text-sm text-blue-300">🐢 Direkt ausführen</label>
-                </div>
-              </div>
-            </div>
+      {/* CardModal */}
+      <CardModal 
+        isOpen={!!(editCard || createForColumn)}
+        onClose={() => { setEditCard(null); setCreateForColumn(null) }}
+        mode={editCard ? 'edit' : 'create'}
+        card={editCard}
+        defaultColumnName={createForColumn}
+        defaultBoardId={selectedBoard}
+        onSave={() => load()}
+        onExecute={(card) => handleExecuteById(card.id)}
+      />
+      {/* Old modal content removed - now using CardModal component */}
 
-            {/* Attachments Section */}
-            <div className="border-t border-gray-700 pt-4 mb-4">
-              <h4 className="text-sm font-semibold text-gray-300 mb-2">📎 Datei-Anhänge</h4>
-              
-              {/* Upload Button */}
-              <div className="mb-3">
-                <input 
-                  type="file" 
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  multiple={false}
-                />
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {uploading ? '⏳ Lädt hoch...' : '📎 Datei anhängen'}
-                </button>
-              </div>
-
-              {/* Attachments List */}
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {/* Real attachments (edit mode) */}
-                {cardAttachments.map(attachment => (
-                  <div key={attachment.id} className="flex items-center justify-between p-2 bg-gray-800 rounded text-xs">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-gray-400">📄</span>
-                      <span className="truncate">{attachment.filename}</span>
-                      <span className="text-gray-500 shrink-0">({formatFileSize(attachment.size)})</span>
-                    </div>
-                    <div className="flex gap-1">
-                      <a 
-                        href={attachments.download(attachment.id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 px-1"
-                        title="Download"
-                      >
-                        ⬇️
-                      </a>
-                      <button 
-                        onClick={() => handleDeleteAttachment(attachment.id)}
-                        className="text-red-400 hover:text-red-300 px-1"
-                        title="Löschen"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {/* Pending attachments (create mode) */}
-                {pendingAttachments.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-blue-900/30 border border-blue-700/50 rounded text-xs">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-blue-400">📄</span>
-                      <span className="truncate">{file.name}</span>
-                      <span className="text-blue-500 shrink-0">({formatFileSize(file.size)})</span>
-                      <span className="text-blue-400 text-xs">(Upload nach Erstellung)</span>
-                    </div>
-                    <button 
-                      onClick={() => handleDeletePendingAttachment(index)}
-                      className="text-red-400 hover:text-red-300 px-1"
-                      title="Löschen"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                ))}
-                {cardAttachments.length === 0 && pendingAttachments.length === 0 && (
-                  <p className="text-gray-500 text-xs text-center py-2">Keine Anhänge</p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col md:flex-row gap-2">
-              <button 
-                onClick={editCard ? handleUpdate : () => handleCreate(createForColumn)} 
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors"
-              >
-                {editCard ? 'Speichern' : 'Erstellen'}
-              </button>
-              {editCard && (
-                <button onClick={() => handleExecute(editCard)} disabled={executing === editCard.id || editCard.on_hold}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
-                  title="Task wird von Schildi bearbeitet. Dialog schließt automatisch.">
-                  {executing === editCard.id ? '⏳ Schildi arbeitet...' : '🐢 Jetzt ausführen'}
-                </button>
-              )}
-              <button onClick={() => { setEditCard(null); setCreateForColumn(null) }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Schließen</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Old modal completely replaced by CardModal component */}
 
       {/* Column manager modal */}
       {showColManager && (

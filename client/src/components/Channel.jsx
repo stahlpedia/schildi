@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { channel, chatChannels, attachments } from '../api'
+import CardModal from './CardModal'
 
 export default function Channel({ onUpdate }) {
   const [channels, setChannels] = useState([])
@@ -22,6 +23,10 @@ export default function Channel({ onUpdate }) {
   const [newChName, setNewChName] = useState('')
   const [newChModelId, setNewChModelId] = useState('')
   const [models, setModels] = useState([])
+  // CardModal for creating tasks from messages
+  const [showCreateTask, setShowCreateTask] = useState(false)
+  const [taskFromMessage, setTaskFromMessage] = useState('')
+  const [taskTitle, setTaskTitle] = useState('')
   const fileInputRef = useRef(null)
   const bottomRef = useRef(null)
 
@@ -167,6 +172,22 @@ export default function Channel({ onUpdate }) {
     if (!confirm('Nachricht löschen?')) return
     await channel.deleteMessage(msgId)
     loadMessages(selected)
+  }
+
+  const handleCreateTaskFromMessage = (message) => {
+    const lines = message.text.split('\n')
+    const firstLine = lines[0] || message.text
+    const title = firstLine.length > 60 ? firstLine.substring(0, 60) + '...' : firstLine
+    
+    setTaskTitle(title)
+    setTaskFromMessage(message.text)
+    setShowCreateTask(true)
+  }
+
+  const handleTaskSave = () => {
+    setShowCreateTask(false)
+    setTaskFromMessage('')
+    setTaskTitle('')
   }
 
   return (
@@ -324,6 +345,9 @@ export default function Channel({ onUpdate }) {
                           </span>
                           {m.task_ref && <span className="text-[10px] bg-yellow-900/50 text-yellow-300 px-1.5 rounded">Task #{m.task_ref}</span>}
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
+                            {m.author !== 'user' && (
+                              <button onClick={() => handleCreateTaskFromMessage(m)} className="text-gray-400 hover:text-blue-400 text-[10px]" title="Task erstellen">📋</button>
+                            )}
                             <button onClick={() => handleEditMsg(m)} className="text-gray-400 hover:text-blue-400 text-[10px]">✏️</button>
                             <button onClick={() => handleDeleteMsg(m.id)} className="text-gray-400 hover:text-red-400 text-[10px]">🗑️</button>
                           </div>
@@ -407,6 +431,17 @@ export default function Channel({ onUpdate }) {
           </div>
         </div>
       )}
+
+      {/* CardModal for creating tasks from messages */}
+      <CardModal 
+        isOpen={showCreateTask}
+        onClose={() => setShowCreateTask(false)}
+        mode="create"
+        defaultColumnName="backlog"
+        defaultTitle={taskTitle}
+        defaultDescription={taskFromMessage}
+        onSave={handleTaskSave}
+      />
     </div>
   )
 }
