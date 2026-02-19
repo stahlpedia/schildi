@@ -19,7 +19,7 @@ const upload = multer({
 
 // Configure multer for branding logo uploads (2MB limit)
 const uploadLogo = multer({ 
-  dest: path.join(__dirname, '../../data/branding/'),
+  dest: tempDir, // Use temp dir to avoid cross-device rename issues
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
@@ -41,6 +41,38 @@ const brandingDir = path.join(__dirname, '../../data/branding/');
 if (!fs.existsSync(brandingDir)) {
   fs.mkdirSync(brandingDir, { recursive: true });
 }
+
+// Serve logo file BEFORE auth middleware (loaded via <img src>, no token)
+router.get('/branding/logo-file', (req, res) => {
+  try {
+    const logoRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('branding_logo_path');
+    
+    if (!logoRow || !logoRow.value || !fs.existsSync(logoRow.value)) {
+      return res.status(404).json({ error: 'Logo nicht gefunden' });
+    }
+    
+    const logoPath = logoRow.value;
+    const extension = path.extname(logoPath).toLowerCase();
+    
+    const contentTypes = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.svg': 'image/svg+xml',
+      '.webp': 'image/webp'
+    };
+    
+    const contentType = contentTypes[extension] || 'image/png';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    
+    const stream = fs.createReadStream(logoPath);
+    stream.pipe(res);
+  } catch (error) {
+    console.error('Logo serve error:', error);
+    res.status(500).json({ error: 'Fehler beim Laden des Logos' });
+  }
+});
 
 // All admin endpoints require authentication
 router.use(authenticate);
@@ -130,8 +162,9 @@ router.post('/branding/logo', uploadLogo.single('logo'), (req, res) => {
       } catch {}
     });
     
-    // Move uploaded file to final location
-    fs.renameSync(req.file.path, finalPath);
+    // Copy uploaded file to final location (copyFile to handle cross-device)
+    fs.copyFileSync(req.file.path, finalPath);
+    try { fs.unlinkSync(req.file.path); } catch {}
     
     // Save path to database
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('branding_logo_path', finalPath);
@@ -168,38 +201,7 @@ router.delete('/branding/logo', (req, res) => {
   }
 });
 
-// Serve logo file
-router.get('/branding/logo-file', (req, res) => {
-  try {
-    const logoRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('branding_logo_path');
-    
-    if (!logoRow || !logoRow.value || !fs.existsSync(logoRow.value)) {
-      return res.status(404).json({ error: 'Logo nicht gefunden' });
-    }
-    
-    const logoPath = logoRow.value;
-    const extension = path.extname(logoPath).toLowerCase();
-    
-    // Set appropriate content type
-    const contentTypes = {
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.webp': 'image/webp'
-    };
-    
-    const contentType = contentTypes[extension] || 'image/png';
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 hour cache
-    
-    const stream = fs.createReadStream(logoPath);
-    stream.pipe(res);
-  } catch (error) {
-    console.error('Logo serve error:', error);
-    res.status(500).json({ error: 'Fehler beim Laden des Logos' });
-  }
-});
+// (logo-file endpoint moved before auth middleware above)
 
 // Get system information
 router.get('/system-info', async (req, res) => {
