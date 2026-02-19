@@ -23,6 +23,9 @@ export default function MediaLibrary() {
   const [fileEditTags, setFileEditTags] = useState('')
   const [fileEditAltText, setFileEditAltText] = useState('')
   
+  // Area selector
+  const [selectedArea, setSelectedArea] = useState('Medien')
+  
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -191,8 +194,27 @@ export default function MediaLibrary() {
   }
 
   return (
-    <div className="flex gap-4 relative" style={{ height: 'calc(100vh - 120px)' }}>
-      {/* Desktop Sidebar */}
+    <div className="flex flex-col gap-4" style={{ height: 'calc(100vh - 120px)' }}>
+      {/* Top bar - Area selector */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 bg-gray-900 rounded-xl border border-gray-800 px-4 py-3">
+        <div className="flex items-center gap-3 flex-1">
+          <span className="text-lg">🖼️</span>
+          <select 
+            value={selectedArea} 
+            onChange={e => setSelectedArea(e.target.value)}
+            className="flex-1 md:flex-none px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500"
+          >
+            <option value="Medien">Medien</option>
+            <option value="Templates">Templates</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div className="flex gap-4 relative flex-1 min-h-0">
+      {selectedArea === 'Medien' ? (
+        <>
+        {/* Desktop Sidebar */}
       <div className="hidden md:flex w-80 shrink-0 bg-gray-900 rounded-xl border border-gray-800 flex-col overflow-hidden">
         <div className="p-4 border-b border-gray-800 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-300">🗂️ Ordner</h3>
@@ -462,6 +484,17 @@ export default function MediaLibrary() {
           </div>
         )}
       </div>
+        </>
+      ) : selectedArea === 'Templates' ? (
+        /* Templates area */
+        <div className="flex-1 bg-gray-900 rounded-xl border border-gray-800 flex items-center justify-center">
+          <div className="text-center text-gray-500">
+            <div className="text-6xl mb-4">📋</div>
+            <div className="text-lg">Template-Bereich kommt bald</div>
+            <div className="text-sm mt-2">Hier werden Templates für Websites verwaltet</div>
+          </div>
+        </div>
+      ) : null}
 
       {/* File Detail Modal */}
       {showFileModal && selectedFile && (
@@ -599,6 +632,7 @@ export default function MediaLibrary() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
