@@ -122,3 +122,44 @@ export const attachments = {
   download: (id) => `${BASE}/attachments/${id}`,
   remove: (id) => api(`/attachments/${id}`, { method: 'DELETE' }),
 };
+
+export const admin = {
+  changePassword: (oldPassword, newPassword) => api('/admin/password', { 
+    method: 'PUT', 
+    body: JSON.stringify({ oldPassword, newPassword }) 
+  }),
+  systemInfo: () => api('/admin/system-info'),
+  backupDb: () => `${BASE}/admin/backup/db`,
+  backupWorkspace: () => `${BASE}/admin/backup/workspace`,
+  backupAttachments: () => `${BASE}/admin/backup/attachments`,
+  restoreDb: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${BASE}/admin/restore/db`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    
+    if (res.status === 401) { logout(); window.location.reload(); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  restoreWorkspace: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${BASE}/admin/restore/workspace`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    
+    if (res.status === 401) { logout(); window.location.reload(); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+};

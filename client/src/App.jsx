@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react'
 import { isLoggedIn, login as doLogin, logout, channel } from './api'
 import Login from './components/Login'
 import KanbanBoard from './components/KanbanBoard'
-import MemoryViewer from './components/MemoryViewer'
+import Admin from './components/Admin'
 import Logbuch from './components/Logbuch'
 import Channel from './components/Channel'
 import Pages from './components/Pages'
 
-const TABS = ['Kanban', 'Memory', 'Channels', 'Pages']
+const TABS = ['Kanban', 'Channels', 'Pages', 'Admin']
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn())
@@ -65,7 +65,7 @@ export default function App() {
                 className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   tab === t ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                 }`}>
-                {t}
+                {t === 'Admin' ? '⚙️' : t}
                 {t === 'Channels' && unansweredCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white">
                     {unansweredCount}
@@ -74,18 +74,10 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <button onClick={() => { logout(); setLoggedIn(false) }}
-            className="text-sm text-gray-500 hover:text-red-400 transition-colors">Logout</button>
         </div>
 
         {/* Mobile Hamburger */}
         <div className="md:hidden flex items-center gap-2">
-          <button onClick={() => { logout(); setLoggedIn(false) }}
-            className="text-sm text-gray-500 hover:text-red-400 transition-colors p-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
           <button 
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="p-2 text-gray-400 hover:text-white transition-colors"
@@ -105,7 +97,7 @@ export default function App() {
                   className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
                     tab === t ? 'bg-emerald-600 text-white' : 'text-gray-300 hover:bg-gray-800'
                   }`}>
-                  <span className="font-medium">{t}</span>
+                  <span className="font-medium">{t === 'Admin' ? '⚙️ Admin' : t}</span>
                   {t === 'Channels' && unansweredCount > 0 && (
                     <span className="w-5 h-5 bg-red-500 rounded-full text-xs font-bold flex items-center justify-center text-white">
                       {unansweredCount}
@@ -122,10 +114,9 @@ export default function App() {
         <div style={{ display: tab === 'Kanban' ? 'block' : 'none' }}>
           <KanbanBoard highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
         </div>
-        <div style={{ display: tab === 'Memory' ? 'block' : 'none' }}><MemoryViewer /></div>
-        <div style={{ display: tab === 'Logbuch' ? 'block' : 'none' }}><Logbuch /></div>
         <div style={{ display: tab === 'Channels' ? 'block' : 'none' }}><Channel onUpdate={checkUnanswered} /></div>
         <div style={{ display: tab === 'Pages' ? 'block' : 'none' }}><Pages onNavigateToKanban={handleNavigateToKanban} /></div>
+        <div style={{ display: tab === 'Admin' ? 'block' : 'none' }}><Admin onLogout={() => { logout(); setLoggedIn(false) }} /></div>
       </main>
     </div>
   )

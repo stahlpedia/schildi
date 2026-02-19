@@ -1,0 +1,250 @@
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const path = require('path');
+const fs = require('fs');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const multer = require('multer');
+const db = require('../db');
+const { authenticate } = require('../auth');
+
+const router = express.Router();
+const execAsync = promisify(exec);
+
+// Configure multer for file uploads
+const upload = multer({ 
+  dest: path.join(__dirname, '../../temp/'),
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+});
+
+// Ensure temp directory exists
+const tempDir = path.join(__dirname, '../../temp/');
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+
+// All admin endpoints require authentication
+router.use(authenticate);
+
+// Change password
+router.put('/password', async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ error: 'Altes und neues Passwort sind erforderlich' });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Neues Passwort muss mindestens 6 Zeichen lang sein' });
+    }
+    
+    // Get current user
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!user || !bcrypt.compareSync(oldPassword, user.password_hash)) {
+      return res.status(400).json({ error: 'Aktuelles Passwort ist falsch' });
+    }
+    
+    // Update password
+    const hash = bcrypt.hashSync(newPassword, 10);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.user.id);
+    
+    res.json({ message: 'Passwort erfolgreich geändert' });
+  } catch (error) {
+    console.error('Password change error:', error);
+    res.status(500).json({ error: 'Interner Serverfehler' });
+  }
+});
+
+// Get system information
+router.get('/system-info', async (req, res) => {
+  try {
+    // Database statistics
+    const tasks = db.prepare('SELECT COUNT(*) as count FROM cards').get().count;
+    const messages = db.prepare('SELECT COUNT(*) as count FROM messages').get().count;
+    const attachments = db.prepare('SELECT COUNT(*) as count FROM attachments').get().count;
+    
+    // Attachment storage size
+    const attachmentDir = path.join(__dirname, '../../data/attachments/');
+    let attachmentSize = '0 B';
+    if (fs.existsSync(attachmentDir)) {
+      try {
+        const { stdout } = await execAsync(`du -sh "${attachmentDir}"`);
+        attachmentSize = stdout.split('\t')[0];
+      } catch {
+        attachmentSize = 'N/A';
+      }
+    }
+    
+    // Check OpenClaw status
+    let openclawStatus = false;
+    try {
+      const openclawUrl = process.env.OPENCLAW_URL || 'http://localhost:8080';
+      const fetch = require('node-fetch');
+      const response = await fetch(`${openclawUrl}/health`, { timeout: 3000 });
+      openclawStatus = response.ok;
+    } catch {
+      openclawStatus = false;
+    }
+    
+    res.json({
+      db_stats: {
+        tasks,
+        messages,
+        attachments
+      },
+      attachment_size: attachmentSize,
+      openclaw_status: openclawStatus
+    });
+  } catch (error) {
+    console.error('System info error:', error);
+    res.status(500).json({ error: 'Fehler beim Laden der System-Informationen' });
+  }
+});
+
+// Backup database
+router.get('/backup/db', (req, res) => {
+  try {
+    const dbPath = path.join(__dirname, '../../data/schildi.db');
+    
+    if (!fs.existsSync(dbPath)) {
+      return res.status(404).json({ error: 'Datenbank-Datei nicht gefunden' });
+    }
+    
+    res.setHeader('Content-Disposition', 'attachment; filename="schildi.db"');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    
+    const stream = fs.createReadStream(dbPath);
+    stream.pipe(res);
+  } catch (error) {
+    console.error('DB backup error:', error);
+    res.status(500).json({ error: 'Fehler beim Backup der Datenbank' });
+  }
+});
+
+// Backup workspace
+router.get('/backup/workspace', async (req, res) => {
+  try {
+    const workspaceDir = process.env.WORKSPACE_DIR || '/home/node/.openclaw/workspace';
+    const tempFile = path.join(tempDir, `workspace-${Date.now()}.tar.gz`);
+    
+    if (!fs.existsSync(workspaceDir)) {
+      return res.status(404).json({ error: 'Workspace-Verzeichnis nicht gefunden' });
+    }
+    
+    await execAsync(`tar -czf "${tempFile}" -C "${path.dirname(workspaceDir)}" "${path.basename(workspaceDir)}"`);
+    
+    res.setHeader('Content-Disposition', 'attachment; filename="workspace.tar.gz"');
+    res.setHeader('Content-Type', 'application/gzip');
+    
+    const stream = fs.createReadStream(tempFile);
+    stream.pipe(res);
+    
+    // Clean up temp file after sending
+    stream.on('end', () => {
+      fs.unlink(tempFile, () => {});
+    });
+  } catch (error) {
+    console.error('Workspace backup error:', error);
+    res.status(500).json({ error: 'Fehler beim Backup des Workspace' });
+  }
+});
+
+// Backup attachments
+router.get('/backup/attachments', async (req, res) => {
+  try {
+    const attachmentDir = path.join(__dirname, '../../data/attachments/');
+    const tempFile = path.join(tempDir, `attachments-${Date.now()}.tar.gz`);
+    
+    if (!fs.existsSync(attachmentDir)) {
+      return res.status(404).json({ error: 'Attachment-Verzeichnis nicht gefunden' });
+    }
+    
+    await execAsync(`tar -czf "${tempFile}" -C "${path.dirname(attachmentDir)}" "${path.basename(attachmentDir)}"`);
+    
+    res.setHeader('Content-Disposition', 'attachment; filename="attachments.tar.gz"');
+    res.setHeader('Content-Type', 'application/gzip');
+    
+    const stream = fs.createReadStream(tempFile);
+    stream.pipe(res);
+    
+    // Clean up temp file after sending
+    stream.on('end', () => {
+      fs.unlink(tempFile, () => {});
+    });
+  } catch (error) {
+    console.error('Attachments backup error:', error);
+    res.status(500).json({ error: 'Fehler beim Backup der Attachments' });
+  }
+});
+
+// Restore database
+router.post('/restore/db', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Keine Datei hochgeladen' });
+    }
+    
+    const uploadedPath = req.file.path;
+    const dbPath = path.join(__dirname, '../../data/schildi.db');
+    const backupPath = path.join(__dirname, '../../data/schildi.db.backup');
+    
+    // Create backup of current database
+    if (fs.existsSync(dbPath)) {
+      fs.copyFileSync(dbPath, backupPath);
+    }
+    
+    // Replace database
+    fs.copyFileSync(uploadedPath, dbPath);
+    
+    // Clean up uploaded file
+    fs.unlinkSync(uploadedPath);
+    
+    res.json({ message: 'Datenbank erfolgreich wiederhergestellt' });
+  } catch (error) {
+    console.error('DB restore error:', error);
+    
+    // Try to restore backup if something went wrong
+    const dbPath = path.join(__dirname, '../../data/schildi.db');
+    const backupPath = path.join(__dirname, '../../data/schildi.db.backup');
+    if (fs.existsSync(backupPath)) {
+      try {
+        fs.copyFileSync(backupPath, dbPath);
+      } catch {}
+    }
+    
+    res.status(500).json({ error: 'Fehler beim Wiederherstellen der Datenbank' });
+  }
+});
+
+// Restore workspace
+router.post('/restore/workspace', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Keine Datei hochgeladen' });
+    }
+    
+    const uploadedPath = req.file.path;
+    const workspaceDir = process.env.WORKSPACE_DIR || '/home/node/.openclaw/workspace';
+    const parentDir = path.dirname(workspaceDir);
+    
+    // Extract tar.gz to parent directory (will overwrite workspace contents)
+    await execAsync(`tar -xzf "${uploadedPath}" -C "${parentDir}"`);
+    
+    // Clean up uploaded file
+    fs.unlinkSync(uploadedPath);
+    
+    res.json({ message: 'Workspace erfolgreich wiederhergestellt' });
+  } catch (error) {
+    console.error('Workspace restore error:', error);
+    
+    // Clean up uploaded file
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    
+    res.status(500).json({ error: 'Fehler beim Wiederherstellen des Workspace' });
+  }
+});
+
+module.exports = router;
