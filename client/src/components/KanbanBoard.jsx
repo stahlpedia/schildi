@@ -11,7 +11,7 @@ export default function KanbanBoard(props = {}) {
   const [cols, setCols] = useState([])
   const [boardsList, setBoardsList] = useState([])
   const [selectedBoard, setSelectedBoard] = useState(null)
-  const [showForm, setShowForm] = useState(null)
+  const [createForColumn, setCreateForColumn] = useState(null)
   const [editCard, setEditCard] = useState(null)
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
@@ -29,6 +29,7 @@ export default function KanbanBoard(props = {}) {
   const [showBoardModal, setShowBoardModal] = useState(false)
   const [newBoardName, setNewBoardName] = useState('')
   const [cardAttachments, setCardAttachments] = useState([])
+  const [pendingAttachments, setPendingAttachments] = useState([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
   const dragItem = useRef(null)
@@ -85,8 +86,22 @@ export default function KanbanBoard(props = {}) {
       on_hold: onHold ? 1 : 0
     })
     
+    // Upload pending attachments if any
+    if (response?.id && pendingAttachments.length > 0) {
+      setUploading(true)
+      try {
+        for (const file of pendingAttachments) {
+          await attachments.upload(file, 'card', response.id)
+        }
+      } catch (e) {
+        alert('Einige Anhänge konnten nicht hochgeladen werden: ' + e.message)
+      }
+      setUploading(false)
+    }
+    
     const shouldExecute = executeDirectly
-    setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false); setExecuteDirectly(false); setShowForm(null); 
+    setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false); setExecuteDirectly(false); 
+    setCreateForColumn(null); setPendingAttachments([]); setCardAttachments([])
     load()
     
     // Auto-execute if requested
@@ -135,7 +150,9 @@ export default function KanbanBoard(props = {}) {
     
     const shouldExecute = executeDirectly
     const cardId = editCard.id
-    setEditCard(null); setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false); setExecuteDirectly(false); load()
+    setEditCard(null); setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false); setExecuteDirectly(false); 
+    setPendingAttachments([]); setCardAttachments([])
+    load()
     
     // Auto-execute if requested
     if (shouldExecute) {
@@ -167,6 +184,7 @@ export default function KanbanBoard(props = {}) {
     setDueDate(card.due_date || '');
     setOnHold(card.on_hold === 1);
     setExecuteDirectly(false); // Reset execute directly checkbox
+    setPendingAttachments([]); // Clear pending attachments
     
     // Load attachments
     try {
@@ -178,10 +196,33 @@ export default function KanbanBoard(props = {}) {
     }
   }
 
+  const startCreate = (colName) => {
+    setCreateForColumn(colName)
+    setTitle('')
+    setDesc('')
+    setLabels('')
+    setDueDate('')
+    setOnHold(false)
+    setExecuteDirectly(false)
+    setCardAttachments([])
+    setPendingAttachments([])
+  }
+
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
-    if (!file || !editCard) return;
+    if (!file) return;
 
+    // In create mode: add to pending attachments
+    if (createForColumn) {
+      setPendingAttachments(prev => [...prev, file]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // In edit mode: upload immediately
+    if (!editCard) return;
     setUploading(true);
     try {
       const attachment = await attachments.upload(file, 'card', editCard.id);
@@ -206,6 +247,10 @@ export default function KanbanBoard(props = {}) {
     } catch (e) {
       alert('Löschen fehlgeschlagen: ' + e.message);
     }
+  };
+
+  const handleDeletePendingAttachment = (index) => {
+    setPendingAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
   const formatFileSize = (bytes) => {
@@ -317,11 +362,11 @@ export default function KanbanBoard(props = {}) {
         </div>
       )}
 
-      {/* Edit card modal */}
-      {editCard && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 md:p-0" onClick={() => setEditCard(null)}>
+      {/* Create/Edit card modal */}
+      {(editCard || createForColumn) && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 md:p-0" onClick={() => { setEditCard(null); setCreateForColumn(null) }}>
           <div className="bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-700 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Karte bearbeiten</h3>
+            <h3 className="text-lg font-bold mb-4">{editCard ? 'Karte bearbeiten' : 'Neue Karte'}</h3>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titel"
               className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Beschreibung" rows={3}
@@ -372,6 +417,7 @@ export default function KanbanBoard(props = {}) {
 
               {/* Attachments List */}
               <div className="space-y-2 max-h-32 overflow-y-auto">
+                {/* Real attachments (edit mode) */}
                 {cardAttachments.map(attachment => (
                   <div key={attachment.id} className="flex items-center justify-between p-2 bg-gray-800 rounded text-xs">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -399,20 +445,45 @@ export default function KanbanBoard(props = {}) {
                     </div>
                   </div>
                 ))}
-                {cardAttachments.length === 0 && (
+                {/* Pending attachments (create mode) */}
+                {pendingAttachments.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 bg-blue-900/30 border border-blue-700/50 rounded text-xs">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-blue-400">📄</span>
+                      <span className="truncate">{file.name}</span>
+                      <span className="text-blue-500 shrink-0">({formatFileSize(file.size)})</span>
+                      <span className="text-blue-400 text-xs">(Upload nach Erstellung)</span>
+                    </div>
+                    <button 
+                      onClick={() => handleDeletePendingAttachment(index)}
+                      className="text-red-400 hover:text-red-300 px-1"
+                      title="Löschen"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+                {cardAttachments.length === 0 && pendingAttachments.length === 0 && (
                   <p className="text-gray-500 text-xs text-center py-2">Keine Anhänge</p>
                 )}
               </div>
             </div>
 
             <div className="flex flex-col md:flex-row gap-2">
-              <button onClick={handleUpdate} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Speichern</button>
-              <button onClick={() => handleExecute(editCard)} disabled={executing === editCard.id || editCard.on_hold}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
-                title="Task wird von Schildi bearbeitet. Dialog schließt automatisch.">
-                {executing === editCard.id ? '⏳ Schildi arbeitet...' : '🐢 Jetzt ausführen'}
+              <button 
+                onClick={editCard ? handleUpdate : () => handleCreate(createForColumn)} 
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors"
+              >
+                {editCard ? 'Speichern' : 'Erstellen'}
               </button>
-              <button onClick={() => setEditCard(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Schließen</button>
+              {editCard && (
+                <button onClick={() => handleExecute(editCard)} disabled={executing === editCard.id || editCard.on_hold}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+                  title="Task wird von Schildi bearbeitet. Dialog schließt automatisch.">
+                  {executing === editCard.id ? '⏳ Schildi arbeitet...' : '🐢 Jetzt ausführen'}
+                </button>
+              )}
+              <button onClick={() => { setEditCard(null); setCreateForColumn(null) }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Schließen</button>
             </div>
           </div>
         </div>
@@ -519,40 +590,9 @@ export default function KanbanBoard(props = {}) {
             onDragOver={onDragOver} onDrop={e => onDrop(e, col.name)}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-lg">{col.label} <span className="text-gray-500 text-sm ml-1">{colCards(col.name).length}</span></h2>
-              <button onClick={() => { setShowForm(showForm === col.name ? null : col.name); setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false) }}
+              <button onClick={() => startCreate(col.name)}
                 className="text-gray-500 hover:text-emerald-400 text-xl transition-colors">+</button>
             </div>
-
-            {showForm === col.name && (
-              <div className="mb-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titel"
-                  className="w-full mb-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" autoFocus />
-                <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Beschreibung" rows={2}
-                  className="w-full mb-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                <input value={labels} onChange={e => setLabels(e.target.value)} placeholder="Labels (kommagetrennt)"
-                  className="w-full mb-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                <div className="flex gap-2 mb-2">
-                  <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} placeholder="Fällig am"
-                    className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-white focus:outline-none focus:border-emerald-500" />
-                  <label className="flex items-center gap-1 text-xs text-gray-300">
-                    <input type="checkbox" checked={onHold} onChange={e => setOnHold(e.target.checked)}
-                      className="rounded bg-gray-700 border-gray-600 text-yellow-500" />
-                    On Hold
-                  </label>
-                </div>
-                <div className="flex gap-2 mb-2">
-                  <label className="flex items-center gap-1 text-xs text-blue-300">
-                    <input type="checkbox" checked={executeDirectly} onChange={e => setExecuteDirectly(e.target.checked)}
-                      className="rounded bg-gray-700 border-gray-600 text-blue-500" />
-                    🐢 Direkt ausführen
-                  </label>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => handleCreate(col.name)} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-sm transition-colors">Erstellen</button>
-                  <button onClick={() => setShowForm(null)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors">×</button>
-                </div>
-              </div>
-            )}
 
             <div className="space-y-3">
               {colCards(col.name).map(card => (
@@ -608,40 +648,11 @@ export default function KanbanBoard(props = {}) {
               onDragOver={onDragOver} onDrop={e => onDrop(e, col.name)}>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-bold text-base">{col.label} <span className="text-gray-500 text-sm ml-1">{colCards(col.name).length}</span></h2>
-                <button onClick={() => { setShowForm(showForm === col.name ? null : col.name); setTitle(''); setDesc(''); setLabels(''); setDueDate(''); setOnHold(false) }}
+                <button onClick={() => startCreate(col.name)}
                   className="text-gray-500 hover:text-emerald-400 text-xl transition-colors">+</button>
               </div>
 
-              {showForm === col.name && (
-                <div className="mb-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
-                  <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titel"
-                    className="w-full mb-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" autoFocus />
-                  <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Beschreibung" rows={2}
-                    className="w-full mb-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                  <input value={labels} onChange={e => setLabels(e.target.value)} placeholder="Labels (kommagetrennt)"
-                    className="w-full mb-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                  <div className="flex gap-2 mb-2">
-                    <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} placeholder="Fällig am"
-                      className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-white focus:outline-none focus:border-emerald-500" />
-                    <label className="flex items-center gap-1 text-xs text-gray-300">
-                      <input type="checkbox" checked={onHold} onChange={e => setOnHold(e.target.checked)}
-                        className="rounded bg-gray-700 border-gray-600 text-yellow-500" />
-                      On Hold
-                    </label>
-                  </div>
-                  <div className="flex gap-2 mb-2">
-                    <label className="flex items-center gap-1 text-xs text-blue-300">
-                      <input type="checkbox" checked={executeDirectly} onChange={e => setExecuteDirectly(e.target.checked)}
-                        className="rounded bg-gray-700 border-gray-600 text-blue-500" />
-                      🐢 Direkt ausführen
-                    </label>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleCreate(col.name)} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-sm transition-colors">Erstellen</button>
-                    <button onClick={() => setShowForm(null)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors">×</button>
-                  </div>
-                </div>
-              )}
+{/* Mobile inline form removed - now using unified modal */}
 
               <div className="space-y-3">
                 {colCards(col.name).map((card, index) => {
