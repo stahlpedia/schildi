@@ -1,6 +1,12 @@
 // satori is ESM-only, we need dynamic import
 let satori;
-const { Resvg } = require('@resvg/resvg-js');
+let Resvg;
+try {
+  Resvg = require('@resvg/resvg-js').Resvg;
+} catch (e) {
+  console.warn('⚠️ @resvg/resvg-js nicht verfügbar (Alpine/musl?). PNG-Export deaktiviert.');
+  Resvg = null;
+}
 const fs = require('fs');
 const path = require('path');
 
@@ -171,6 +177,10 @@ function text(data, width, height) {
 const templates = { quote, text };
 
 async function renderTemplate(templateName, data, width = 1080, height = 1080, scale = 2) {
+  if (!Resvg) {
+    throw new Error('PNG-Export nicht verfügbar. @resvg/resvg-js konnte nicht geladen werden (Alpine Linux braucht glibc). Bitte Dockerfile auf node:22-slim umstellen.');
+  }
+  
   // Load satori dynamically (ESM module)
   if (!satori) {
     const satoriModule = await import('satori');
