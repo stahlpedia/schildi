@@ -1,6 +1,9 @@
 const { Router } = require('express');
 const db = require('../db');
 const { authenticate } = require('../auth');
+const { renderTemplate } = require('../lib/renderer');
+const fs = require('fs');
+const path = require('path');
 
 const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://openclaw:18789';
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
@@ -324,6 +327,93 @@ Format die Antwort als strukturierte Liste, damit ich die Posts einzeln als "ide
   } catch (error) {
     console.error('Generate plan error:', error);
     res.status(500).json({ error: `Fehler beim Generieren des Plans: ${error.message}` });
+  }
+});
+
+// === PNG Render API ===
+
+// POST /api/social/render — Rendert ein Template als PNG
+router.post('/render', async (req, res) => {
+  try {
+    const { template, data, width, height, scale } = req.body;
+    
+    if (!template || !data) {
+      return res.status(400).json({ error: 'Template und data sind erforderlich' });
+    }
+    
+    const png = await renderTemplate(template, data, width, height, scale);
+    
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Length', png.length);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 hour cache
+    res.send(png);
+  } catch (error) {
+    console.error('Render template error:', error);
+    res.status(500).json({ error: `Fehler beim Rendern: ${error.message}` });
+  }
+});
+
+// POST /api/social/render/preview — Preview endpoint (returns base64 for inline display)
+router.post('/render/preview', async (req, res) => {
+  try {
+    const { template, data, width, height } = req.body;
+    
+    if (!template || !data) {
+      return res.status(400).json({ error: 'Template und data sind erforderlich' });
+    }
+    
+    const png = await renderTemplate(template, data, width || 1080, height || 1080, 1); // scale=1 for preview
+    const base64 = Buffer.from(png).toString('base64');
+    
+    res.json({ image: `data:image/png;base64,${base64}` });
+  } catch (error) {
+    console.error('Render preview error:', error);
+    res.status(500).json({ error: `Fehler beim Rendern der Vorschau: ${error.message}` });
+  }
+});
+
+// POST /api/social/render/save — Rendert PNG und speichert in Mediathek
+router.post('/render/save', async (req, res) => {
+  try {
+    const { template, data, width, height, scale, filename } = req.body;
+    
+    if (!template || !data) {
+      return res.status(400).json({ error: 'Template und data sind erforderlich' });
+    }
+    
+    const png = await renderTemplate(template, data, width, height, scale);
+    
+    // Finde oder erstelle "Generiert" Ordner
+    let folder = db.prepare("SELECT id FROM media_folders WHERE name = 'Generiert' AND is_system = 1").get();
+    if (!folder) {
+      // Erstelle Generiert-Ordner falls nicht vorhanden
+      const folderResult = db.prepare("INSERT INTO media_folders (name, is_system, created_at, updated_at) VALUES ('Generiert', 1, datetime('now'), datetime('now'))").run();
+      folder = { id: folderResult.lastInsertRowid };
+    }
+    
+    // Speichere Datei
+    const fname = filename || `social-${template}-${Date.now()}.png`;
+    const mediaDir = path.join(__dirname, '../../data/media/', String(folder.id));
+    fs.mkdirSync(mediaDir, { recursive: true });
+    const filepath = path.join(mediaDir, fname);
+    fs.writeFileSync(filepath, png);
+    
+    // DB-Eintrag
+    const result = db.prepare(`
+      INSERT INTO media_files (folder_id, filename, filepath, mimetype, size, tags, created_at, updated_at) 
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).run(folder.id, fname, filepath, 'image/png', png.length, JSON.stringify(['generated', template]));
+    
+    res.json({ 
+      id: result.lastInsertRowid, 
+      filename: fname, 
+      size: png.length,
+      folder: 'Generiert',
+      template: template
+    });
+  } catch (error) {
+    console.error('Render save error:', error);
+    res.status(500).json({ error: `Fehler beim Speichern: ${error.message}` });
   }
 });
 

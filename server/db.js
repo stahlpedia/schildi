@@ -238,7 +238,8 @@ db.exec(`
     name TEXT NOT NULL,
     parent_id INTEGER,
     is_system INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS media_files (
@@ -253,9 +254,37 @@ db.exec(`
     tags TEXT DEFAULT '[]',
     alt_text TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (folder_id) REFERENCES media_folders(id)
   );
 `);
+
+// Migrate: add updated_at column to media_folders if missing
+try {
+  db.prepare('SELECT updated_at FROM media_folders LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE media_folders ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+}
+
+// Migrate: add updated_at column to media_files if missing
+try {
+  db.prepare('SELECT updated_at FROM media_files LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE media_files ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+}
+
+// Migrate: add settings updated_at column if missing
+try {
+  db.prepare('SELECT updated_at FROM settings LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE settings ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+}
+
+try {
+  db.prepare('SELECT created_at FROM settings LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE settings ADD COLUMN created_at TEXT DEFAULT (datetime('now'))");
+}
 
 // Seed media system folders if empty
 const mediaFolderCount = db.prepare('SELECT COUNT(*) as c FROM media_folders').get();

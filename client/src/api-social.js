@@ -37,4 +37,29 @@ export const socialApi = {
   
   // Plan Generation
   generatePlan: (params) => api('/social/generate-plan', { method: 'POST', body: JSON.stringify(params) }),
+  
+  // PNG Rendering
+  renderPreview: async (data) => api('/social/render/preview', { method: 'POST', body: JSON.stringify(data) }),
+  renderDownload: async (data) => {
+    const response = await fetch(`${BASE}/social/render`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Render error: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `social-${data.template}-${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  },
+  renderSave: (data) => api('/social/render/save', { method: 'POST', body: JSON.stringify(data) }),
 };

@@ -28,6 +28,23 @@ const FREQUENCY_OPTIONS = [
 const PLATFORMS = ['LinkedIn', 'Instagram', 'X'];
 const STATUS_OPTIONS = ['idea', 'draft', 'review', 'scheduled', 'published'];
 
+// Template options
+const TEMPLATES = {
+  quote: { label: 'Zitat', icon: '💬', color: '#6366f1' },
+  tips: { label: 'Tipps', icon: '💡', color: '#10b981' },
+  checklist: { label: 'Checkliste', icon: '✅', color: '#f59e0b' },
+  stats: { label: 'Statistik', icon: '📊', color: '#8b5cf6' },
+  text: { label: 'Text-Post', icon: '📝', color: '#ef4444' }
+};
+
+// Format options
+const FORMATS = {
+  'instagram-square': { label: 'Instagram Post', width: 1080, height: 1080 },
+  'linkedin-post': { label: 'LinkedIn Post', width: 1200, height: 628 },
+  'story': { label: 'Story', width: 1080, height: 1920 },
+  'custom': { label: 'Benutzerdefiniert', width: 1080, height: 1080 }
+};
+
 export default function SocialMedia() {
   // State
   const [activeView, setActiveView] = useState('calendar'); // 'calendar' | 'profile'
@@ -47,8 +64,10 @@ export default function SocialMedia() {
   // Modals
   const [showPostModal, setShowPostModal] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showGraphicsModal, setShowGraphicsModal] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [activePostTab, setActivePostTab] = useState('basic'); // 'basic' | 'graphics'
   
   // Form states
   const [postForm, setPostForm] = useState({
@@ -63,6 +82,15 @@ export default function SocialMedia() {
   const [profileForm, setProfileForm] = useState({ ...profile });
   const [hashtagInput, setHashtagInput] = useState('');
   const [topicInput, setTopicInput] = useState('');
+  
+  // Graphics state
+  const [selectedTemplate, setSelectedTemplate] = useState('quote');
+  const [selectedFormat, setSelectedFormat] = useState('instagram-square');
+  const [templateData, setTemplateData] = useState({});
+  const [previewImage, setPreviewImage] = useState(null);
+  const [customWidth, setCustomWidth] = useState(1080);
+  const [customHeight, setCustomHeight] = useState(1080);
+  const [renderLoading, setRenderLoading] = useState(false);
 
   // Load data
   useEffect(() => {
@@ -254,6 +282,91 @@ export default function SocialMedia() {
       setTopicInput(profile.topics.join(', '));
     }
   }, [profile.topics]);
+
+  // Graphics Handlers
+  const handleTemplateChange = (template) => {
+    setSelectedTemplate(template);
+    setTemplateData({}); // Reset template data when changing template
+    setPreviewImage(null); // Clear preview
+  };
+
+  const handlePreviewRender = async () => {
+    try {
+      setRenderLoading(true);
+      const format = FORMATS[selectedFormat];
+      const width = selectedFormat === 'custom' ? customWidth : format.width;
+      const height = selectedFormat === 'custom' ? customHeight : format.height;
+      
+      const result = await socialApi.renderPreview({
+        template: selectedTemplate,
+        data: templateData,
+        width,
+        height
+      });
+      
+      setPreviewImage(result.image);
+    } catch (error) {
+      console.error('Failed to generate preview:', error);
+      alert('Fehler beim Generieren der Vorschau');
+    } finally {
+      setRenderLoading(false);
+    }
+  };
+
+  const handleDownloadRender = async () => {
+    try {
+      setRenderLoading(true);
+      const format = FORMATS[selectedFormat];
+      const width = selectedFormat === 'custom' ? customWidth : format.width;
+      const height = selectedFormat === 'custom' ? customHeight : format.height;
+      
+      await socialApi.renderDownload({
+        template: selectedTemplate,
+        data: templateData,
+        width,
+        height,
+        scale: 2 // High resolution for download
+      });
+    } catch (error) {
+      console.error('Failed to download:', error);
+      alert('Fehler beim Herunterladen');
+    } finally {
+      setRenderLoading(false);
+    }
+  };
+
+  const handleSaveRender = async () => {
+    try {
+      setRenderLoading(true);
+      const format = FORMATS[selectedFormat];
+      const width = selectedFormat === 'custom' ? customWidth : format.width;
+      const height = selectedFormat === 'custom' ? customHeight : format.height;
+      
+      const result = await socialApi.renderSave({
+        template: selectedTemplate,
+        data: templateData,
+        width,
+        height,
+        scale: 2
+      });
+      
+      alert(`Bild erfolgreich in der Mediathek gespeichert!\nDatei: ${result.filename}`);
+    } catch (error) {
+      console.error('Failed to save:', error);
+      alert('Fehler beim Speichern in der Mediathek');
+    } finally {
+      setRenderLoading(false);
+    }
+  };
+
+  const resetGraphicsForm = () => {
+    setSelectedTemplate('quote');
+    setSelectedFormat('instagram-square');
+    setTemplateData({});
+    setPreviewImage(null);
+    setCustomWidth(1080);
+    setCustomHeight(1080);
+  };
 
   return (
     <div className="flex h-full bg-gray-900 text-white">
@@ -517,6 +630,31 @@ export default function SocialMedia() {
               {editingPost ? 'Post bearbeiten' : 'Neuer Post'}
             </h2>
             
+            {/* Tabs */}
+            <div className="flex space-x-1 mb-6 bg-gray-700 p-1 rounded-lg">
+              <button
+                onClick={() => setActivePostTab('basic')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activePostTab === 'basic' 
+                    ? 'bg-gray-600 text-white' 
+                    : 'text-gray-300 hover:text-white hover:bg-gray-600'
+                }`}
+              >
+                📝 Post Details
+              </button>
+              <button
+                onClick={() => setActivePostTab('graphics')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activePostTab === 'graphics' 
+                    ? 'bg-gray-600 text-white' 
+                    : 'text-gray-300 hover:text-white hover:bg-gray-600'
+                }`}
+              >
+                🎨 Grafik erstellen
+              </button>
+            </div>
+            
+            {activePostTab === 'basic' ? (
             <div className="space-y-4">
               {/* Titel */}
               <div>
@@ -628,11 +766,319 @@ export default function SocialMedia() {
                 </div>
               )}
             </div>
+            ) : (
+            // Graphics Tab
+            <div className="space-y-6">
+              {/* Template Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Template wählen</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(TEMPLATES).map(([key, template]) => (
+                    <button
+                      key={key}
+                      onClick={() => handleTemplateChange(key)}
+                      className={`p-3 rounded-lg border-2 transition-colors ${
+                        selectedTemplate === key
+                          ? 'border-blue-500 bg-blue-500/20'
+                          : 'border-gray-600 hover:border-gray-500'
+                      }`}
+                    >
+                      <div className="text-2xl mb-1">{template.icon}</div>
+                      <div className="text-sm font-medium">{template.label}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Format Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Format</label>
+                <select
+                  value={selectedFormat}
+                  onChange={(e) => setSelectedFormat(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-3"
+                >
+                  {Object.entries(FORMATS).map(([key, format]) => (
+                    <option key={key} value={key}>
+                      {format.label} ({format.width}×{format.height})
+                    </option>
+                  ))}
+                </select>
+                
+                {selectedFormat === 'custom' && (
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Breite</label>
+                      <input
+                        type="number"
+                        value={customWidth}
+                        onChange={(e) => setCustomWidth(parseInt(e.target.value) || 1080)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded p-2"
+                        min="100"
+                        max="3000"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Höhe</label>
+                      <input
+                        type="number"
+                        value={customHeight}
+                        onChange={(e) => setCustomHeight(parseInt(e.target.value) || 1080)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded p-2"
+                        min="100"
+                        max="3000"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Template-specific fields */}
+              {selectedTemplate === 'quote' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Zitat</label>
+                    <textarea
+                      value={templateData.quote || ''}
+                      onChange={(e) => setTemplateData({ ...templateData, quote: e.target.value })}
+                      placeholder="Ein inspirierendes Zitat..."
+                      rows="3"
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Autor</label>
+                    <input
+                      type="text"
+                      value={templateData.author || ''}
+                      onChange={(e) => setTemplateData({ ...templateData, author: e.target.value })}
+                      placeholder="Autor des Zitats"
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Brand-Farbe (optional)</label>
+                    <input
+                      type="color"
+                      value={templateData.brandColor || '#6366f1'}
+                      onChange={(e) => setTemplateData({ ...templateData, brandColor: e.target.value })}
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-2 h-12"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {selectedTemplate === 'tips' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Titel</label>
+                    <input
+                      type="text"
+                      value={templateData.title || ''}
+                      onChange={(e) => setTemplateData({ ...templateData, title: e.target.value })}
+                      placeholder="z.B. 5 Tipps für bessere Produktivität"
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Tipps (einer pro Zeile, max. 5)</label>
+                    <textarea
+                      value={templateData.tips?.join('\n') || ''}
+                      onChange={(e) => setTemplateData({ ...templateData, tips: e.target.value.split('\n').filter(tip => tip.trim()) })}
+                      placeholder="Tipp 1&#10;Tipp 2&#10;Tipp 3"
+                      rows="5"
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Brand-Farbe (optional)</label>
+                    <input
+                      type="color"
+                      value={templateData.brandColor || '#10b981'}
+                      onChange={(e) => setTemplateData({ ...templateData, brandColor: e.target.value })}
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-2 h-12"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {selectedTemplate === 'checklist' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Titel</label>
+                    <input
+                      type="text"
+                      value={templateData.title || ''}
+                      onChange={(e) => setTemplateData({ ...templateData, title: e.target.value })}
+                      placeholder="z.B. Launch Checkliste"
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Checkpunkte (einer pro Zeile, max. 6)</label>
+                    <textarea
+                      value={templateData.items?.join('\n') || ''}
+                      onChange={(e) => setTemplateData({ ...templateData, items: e.target.value.split('\n').filter(item => item.trim()) })}
+                      placeholder="Marketing-Material vorbereiten&#10;Landing Page prüfen&#10;Social Media Posts planen"
+                      rows="6"
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Brand-Farbe (optional)</label>
+                    <input
+                      type="color"
+                      value={templateData.brandColor || '#f59e0b'}
+                      onChange={(e) => setTemplateData({ ...templateData, brandColor: e.target.value })}
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-2 h-12"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {selectedTemplate === 'stats' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Titel</label>
+                    <input
+                      type="text"
+                      value={templateData.title || ''}
+                      onChange={(e) => setTemplateData({ ...templateData, title: e.target.value })}
+                      placeholder="z.B. Q4 Ergebnisse 2024"
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Statistiken (max. 4)</label>
+                    {(templateData.stats || [{ value: '', label: '' }]).map((stat, index) => (
+                      <div key={index} className="grid grid-cols-2 gap-3 mb-3">
+                        <input
+                          type="text"
+                          value={stat.value}
+                          onChange={(e) => {
+                            const newStats = [...(templateData.stats || [])];
+                            newStats[index] = { ...newStats[index], value: e.target.value };
+                            setTemplateData({ ...templateData, stats: newStats });
+                          }}
+                          placeholder="Wert (z.B. 150%)"
+                          className="w-full bg-gray-700 border border-gray-600 rounded p-2"
+                        />
+                        <input
+                          type="text"
+                          value={stat.label}
+                          onChange={(e) => {
+                            const newStats = [...(templateData.stats || [])];
+                            newStats[index] = { ...newStats[index], label: e.target.value };
+                            setTemplateData({ ...templateData, stats: newStats });
+                          }}
+                          placeholder="Label (z.B. Wachstum)"
+                          className="w-full bg-gray-700 border border-gray-600 rounded p-2"
+                        />
+                      </div>
+                    ))}
+                    {(!templateData.stats || templateData.stats.length < 4) && (
+                      <button
+                        onClick={() => {
+                          const newStats = [...(templateData.stats || []), { value: '', label: '' }];
+                          setTemplateData({ ...templateData, stats: newStats });
+                        }}
+                        className="text-sm text-blue-400 hover:text-blue-300"
+                      >
+                        + Statistik hinzufügen
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Brand-Farbe (optional)</label>
+                    <input
+                      type="color"
+                      value={templateData.brandColor || '#8b5cf6'}
+                      onChange={(e) => setTemplateData({ ...templateData, brandColor: e.target.value })}
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-2 h-12"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {selectedTemplate === 'text' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Titel</label>
+                    <input
+                      type="text"
+                      value={templateData.title || ''}
+                      onChange={(e) => setTemplateData({ ...templateData, title: e.target.value })}
+                      placeholder="Haupttitel des Posts"
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Text</label>
+                    <textarea
+                      value={templateData.body || ''}
+                      onChange={(e) => setTemplateData({ ...templateData, body: e.target.value })}
+                      placeholder="Der Haupttext des Posts..."
+                      rows="4"
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Brand-Farbe (optional)</label>
+                    <input
+                      type="color"
+                      value={templateData.brandColor || '#ef4444'}
+                      onChange={(e) => setTemplateData({ ...templateData, brandColor: e.target.value })}
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-2 h-12"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex space-x-3">
+                <button
+                  onClick={handlePreviewRender}
+                  disabled={renderLoading}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 py-2 px-4 rounded font-medium"
+                >
+                  {renderLoading ? 'Lädt...' : '👁️ Vorschau'}
+                </button>
+                <button
+                  onClick={handleDownloadRender}
+                  disabled={renderLoading}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 py-2 px-4 rounded font-medium"
+                >
+                  {renderLoading ? 'Lädt...' : '⬇️ Download'}
+                </button>
+                <button
+                  onClick={handleSaveRender}
+                  disabled={renderLoading}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 py-2 px-4 rounded font-medium"
+                >
+                  {renderLoading ? 'Lädt...' : '💾 Mediathek'}
+                </button>
+              </div>
+
+              {/* Preview */}
+              {previewImage && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Vorschau</label>
+                  <div className="bg-gray-900 border border-gray-600 rounded p-4 text-center">
+                    <img 
+                      src={previewImage} 
+                      alt="Template Preview" 
+                      className="max-w-full max-h-96 mx-auto rounded"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            )}
 
             {/* Modal Actions */}
             <div className="flex justify-between mt-6">
               <div>
-                {editingPost && (
+                {activePostTab === 'basic' && editingPost && (
                   <button
                     onClick={handleDeletePost}
                     className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded"
@@ -640,20 +1086,34 @@ export default function SocialMedia() {
                     Löschen
                   </button>
                 )}
+                {activePostTab === 'graphics' && (
+                  <button
+                    onClick={resetGraphicsForm}
+                    className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded"
+                  >
+                    Zurücksetzen
+                  </button>
+                )}
               </div>
               <div className="space-x-2">
                 <button
-                  onClick={() => setShowPostModal(false)}
+                  onClick={() => {
+                    setShowPostModal(false);
+                    resetGraphicsForm();
+                    setActivePostTab('basic');
+                  }}
                   className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded"
                 >
-                  Abbrechen
+                  Schließen
                 </button>
-                <button
-                  onClick={handleSavePost}
-                  className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
-                >
-                  Speichern
-                </button>
+                {activePostTab === 'basic' && (
+                  <button
+                    onClick={handleSavePost}
+                    className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
+                  >
+                    Speichern
+                  </button>
+                )}
               </div>
             </div>
           </div>
