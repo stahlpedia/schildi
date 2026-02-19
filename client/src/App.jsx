@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { isLoggedIn, login as doLogin, logout, channel } from './api'
+import { isLoggedIn, login as doLogin, logout, channel, admin } from './api'
 import Login from './components/Login'
 import KanbanBoard from './components/KanbanBoard'
 import Admin from './components/Admin'
@@ -16,6 +16,7 @@ export default function App() {
   const [highlightTaskId, setHighlightTaskId] = useState(null)
   const [selectedBoardId, setSelectedBoardId] = useState(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [branding, setBranding] = useState({ title: 'Schildi Dashboard', logoUrl: null })
 
   const checkUnanswered = async () => {
     try {
@@ -24,11 +25,29 @@ export default function App() {
     } catch {}
   }
 
+  const loadBranding = async () => {
+    try {
+      const brandingData = await admin.branding()
+      setBranding(brandingData)
+    } catch (error) {
+      console.error('Failed to load branding:', error)
+    }
+  }
+
   useEffect(() => {
     if (!loggedIn) return
     checkUnanswered()
+    loadBranding()
     const interval = setInterval(checkUnanswered, 15000)
-    return () => clearInterval(interval)
+    
+    // Listen for branding updates
+    const handleBrandingUpdate = () => loadBranding()
+    window.addEventListener('brandingUpdated', handleBrandingUpdate)
+    
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('brandingUpdated', handleBrandingUpdate)
+    }
   }, [loggedIn])
 
   // Also refresh when switching to Channel tab
@@ -53,8 +72,24 @@ export default function App() {
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <header className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-2xl md:text-3xl">🐢</span>
-          <h1 className="text-lg md:text-xl font-bold">Schildi Dashboard</h1>
+          {branding.logoUrl ? (
+            <img 
+              src={branding.logoUrl} 
+              alt="Logo" 
+              className="h-8 md:h-9 max-w-[200px] object-contain"
+              onError={(e) => {
+                // Fallback to emoji if image fails to load
+                e.target.style.display = 'none'
+                const emoji = document.createElement('span')
+                emoji.className = 'text-2xl md:text-3xl'
+                emoji.textContent = '🐢'
+                e.target.parentNode.insertBefore(emoji, e.target)
+              }}
+            />
+          ) : (
+            <span className="text-2xl md:text-3xl">🐢</span>
+          )}
+          <h1 className="text-lg md:text-xl font-bold">{branding.title}</h1>
         </div>
         
         {/* Desktop Navigation */}

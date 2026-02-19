@@ -223,4 +223,12 @@ db.exec(`
   );
 `);
 
+// Create settings table for branding and other key-value configurations
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+`);
+
 module.exports = db;

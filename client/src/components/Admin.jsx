@@ -18,12 +18,28 @@ export default function Admin({ onLogout }) {
   const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
   const [passwordMessage, setPasswordMessage] = useState('')
   const [darkMode, setDarkMode] = useState(localStorage.getItem('darkMode') === 'true')
+  const [branding, setBranding] = useState({ title: 'Schildi Dashboard', logoUrl: null })
+  const [brandingForm, setBrandingForm] = useState({ title: '' })
+  const [brandingMessage, setBrandingMessage] = useState('')
+  const [logoUploading, setLogoUploading] = useState(false)
 
   useEffect(() => {
     if (activeSection === 'system') {
       loadSystemInfo()
+    } else if (activeSection === 'appearance') {
+      loadBrandingSettings()
     }
   }, [activeSection])
+
+  const loadBrandingSettings = async () => {
+    try {
+      const data = await admin.branding()
+      setBranding(data)
+      setBrandingForm({ title: data.title })
+    } catch (error) {
+      console.error('Failed to load branding settings:', error)
+    }
+  }
 
   const loadSystemInfo = async () => {
     try {
@@ -73,6 +89,66 @@ export default function Admin({ onLogout }) {
       document.documentElement.classList.add('dark')
     } else {
       document.documentElement.classList.remove('dark')
+    }
+  }
+
+  const handleTitleSave = async () => {
+    setBrandingMessage('')
+    
+    if (!brandingForm.title || brandingForm.title.trim().length === 0) {
+      setBrandingMessage('Titel ist erforderlich')
+      return
+    }
+    
+    try {
+      await admin.updateBranding({ title: brandingForm.title.trim() })
+      setBranding(prev => ({ ...prev, title: brandingForm.title.trim() }))
+      setBrandingMessage('Titel erfolgreich gespeichert')
+      
+      // Trigger app header update
+      window.dispatchEvent(new CustomEvent('brandingUpdated'))
+    } catch (error) {
+      setBrandingMessage('Fehler beim Speichern des Titels: ' + error.message)
+    }
+  }
+
+  const handleLogoUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+    
+    setBrandingMessage('')
+    setLogoUploading(true)
+    
+    try {
+      await admin.uploadLogo(file)
+      setBranding(prev => ({ ...prev, logoUrl: '/api/admin/branding/logo-file?t=' + Date.now() }))
+      setBrandingMessage('Logo erfolgreich hochgeladen')
+      
+      // Trigger app header update
+      window.dispatchEvent(new CustomEvent('brandingUpdated'))
+    } catch (error) {
+      setBrandingMessage('Fehler beim Upload des Logos: ' + error.message)
+    } finally {
+      setLogoUploading(false)
+      // Clear file input
+      event.target.value = ''
+    }
+  }
+
+  const handleLogoDelete = async () => {
+    if (!confirm('Logo wirklich entfernen?')) return
+    
+    setBrandingMessage('')
+    
+    try {
+      await admin.deleteLogo()
+      setBranding(prev => ({ ...prev, logoUrl: null }))
+      setBrandingMessage('Logo erfolgreich entfernt')
+      
+      // Trigger app header update
+      window.dispatchEvent(new CustomEvent('brandingUpdated'))
+    } catch (error) {
+      setBrandingMessage('Fehler beim Entfernen des Logos: ' + error.message)
     }
   }
 
@@ -169,6 +245,96 @@ export default function Admin({ onLogout }) {
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-gray-100">Erscheinungsbild</h2>
             
+            {/* Branding Settings */}
+            <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+              <h3 className="text-lg font-medium mb-4 text-gray-200">Dashboard-Branding</h3>
+              
+              {/* Title */}
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Dashboard-Titel</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={brandingForm.title}
+                      onChange={(e) => setBrandingForm({ title: e.target.value })}
+                      placeholder="Dashboard-Titel"
+                      className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                    <button
+                      onClick={handleTitleSave}
+                      disabled={!brandingForm.title.trim() || brandingForm.title === branding.title}
+                      className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Speichern
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Logo */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Logo</label>
+                  
+                  {/* Logo Preview */}
+                  <div className="mb-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                    <div className="flex items-center gap-3">
+                      {branding.logoUrl ? (
+                        <img 
+                          src={branding.logoUrl} 
+                          alt="Logo" 
+                          className="h-12 max-w-[200px] object-contain"
+                          onError={(e) => {
+                            e.target.style.display = 'none'
+                            e.target.nextElementSibling.style.display = 'block'
+                          }}
+                        />
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">🐢</span>
+                          <span className="text-gray-400 text-sm">Standard-Emoji</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Logo Actions */}
+                  <div className="flex flex-wrap gap-2">
+                    <label className={`cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm ${logoUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      {logoUploading ? 'Uploading...' : '📁 Logo hochladen'}
+                      <input
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.svg,.webp"
+                        className="hidden"
+                        onChange={handleLogoUpload}
+                        disabled={logoUploading}
+                      />
+                    </label>
+                    {branding.logoUrl && (
+                      <button
+                        onClick={handleLogoDelete}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
+                      >
+                        🗑️ Logo entfernen
+                      </button>
+                    )}
+                  </div>
+                  
+                  <p className="text-xs text-gray-500 mt-2">
+                    Max. 2MB • PNG, JPG, SVG, WebP • Empfohlen: max. 48px Höhe
+                  </p>
+                </div>
+              </div>
+              
+              {brandingMessage && (
+                <p className={`text-sm mt-4 ${brandingMessage.includes('erfolgreich') ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {brandingMessage}
+                </p>
+              )}
+            </div>
+            
+            {/* Theme Settings */}
             <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
               <h3 className="text-lg font-medium mb-4 text-gray-200">Theme</h3>
               <div className="flex items-center space-x-4">

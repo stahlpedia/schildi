@@ -162,4 +162,24 @@ export const admin = {
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
+  
+  // Branding API
+  branding: () => api('/admin/branding'),
+  updateBranding: (data) => api('/admin/branding', { method: 'PUT', body: JSON.stringify(data) }),
+  uploadLogo: async (file) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${BASE}/admin/branding/logo`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    
+    if (res.status === 401) { logout(); window.location.reload(); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  deleteLogo: () => api('/admin/branding/logo', { method: 'DELETE' }),
 };

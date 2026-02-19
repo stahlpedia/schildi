@@ -17,10 +17,29 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
 });
 
-// Ensure temp directory exists
+// Configure multer for branding logo uploads (2MB limit)
+const uploadLogo = multer({ 
+  dest: path.join(__dirname, '../../data/branding/'),
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Nur Bilder sind erlaubt (PNG, JPG, SVG, WebP)'));
+    }
+  }
+});
+
+// Ensure temp and branding directories exist
 const tempDir = path.join(__dirname, '../../temp/');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
+}
+
+const brandingDir = path.join(__dirname, '../../data/branding/');
+if (!fs.existsSync(brandingDir)) {
+  fs.mkdirSync(brandingDir, { recursive: true });
 }
 
 // All admin endpoints require authentication
@@ -53,6 +72,132 @@ router.put('/password', async (req, res) => {
   } catch (error) {
     console.error('Password change error:', error);
     res.status(500).json({ error: 'Interner Serverfehler' });
+  }
+});
+
+// Get branding settings
+router.get('/branding', (req, res) => {
+  try {
+    const titleRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('branding_title');
+    const logoRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('branding_logo_path');
+    
+    const title = titleRow ? titleRow.value : 'Schildi Dashboard';
+    const logoUrl = logoRow ? '/api/admin/branding/logo-file' : null;
+    
+    res.json({ title, logoUrl });
+  } catch (error) {
+    console.error('Branding get error:', error);
+    res.status(500).json({ error: 'Fehler beim Laden der Branding-Einstellungen' });
+  }
+});
+
+// Update branding settings (title)
+router.put('/branding', (req, res) => {
+  try {
+    const { title } = req.body;
+    
+    if (!title || title.trim().length === 0) {
+      return res.status(400).json({ error: 'Titel ist erforderlich' });
+    }
+    
+    // Insert or update title
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('branding_title', title.trim());
+    
+    res.json({ message: 'Titel erfolgreich aktualisiert' });
+  } catch (error) {
+    console.error('Branding update error:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren des Titels' });
+  }
+});
+
+// Upload logo
+router.post('/branding/logo', uploadLogo.single('logo'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Keine Logo-Datei hochgeladen' });
+    }
+    
+    const originalName = req.file.originalname;
+    const extension = path.extname(originalName).toLowerCase();
+    const newFilename = `logo${extension}`;
+    const finalPath = path.join(brandingDir, newFilename);
+    
+    // Remove old logo files
+    const logoFiles = fs.readdirSync(brandingDir).filter(file => file.startsWith('logo.'));
+    logoFiles.forEach(file => {
+      try {
+        fs.unlinkSync(path.join(brandingDir, file));
+      } catch {}
+    });
+    
+    // Move uploaded file to final location
+    fs.renameSync(req.file.path, finalPath);
+    
+    // Save path to database
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('branding_logo_path', finalPath);
+    
+    res.json({ message: 'Logo erfolgreich hochgeladen', logoUrl: '/api/admin/branding/logo-file' });
+  } catch (error) {
+    console.error('Logo upload error:', error);
+    
+    // Clean up uploaded file if something went wrong
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    
+    res.status(500).json({ error: 'Fehler beim Upload des Logos' });
+  }
+});
+
+// Delete logo
+router.delete('/branding/logo', (req, res) => {
+  try {
+    const logoRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('branding_logo_path');
+    
+    if (logoRow && logoRow.value && fs.existsSync(logoRow.value)) {
+      fs.unlinkSync(logoRow.value);
+    }
+    
+    // Remove from database
+    db.prepare('DELETE FROM settings WHERE key = ?').run('branding_logo_path');
+    
+    res.json({ message: 'Logo erfolgreich entfernt' });
+  } catch (error) {
+    console.error('Logo delete error:', error);
+    res.status(500).json({ error: 'Fehler beim Entfernen des Logos' });
+  }
+});
+
+// Serve logo file
+router.get('/branding/logo-file', (req, res) => {
+  try {
+    const logoRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('branding_logo_path');
+    
+    if (!logoRow || !logoRow.value || !fs.existsSync(logoRow.value)) {
+      return res.status(404).json({ error: 'Logo nicht gefunden' });
+    }
+    
+    const logoPath = logoRow.value;
+    const extension = path.extname(logoPath).toLowerCase();
+    
+    // Set appropriate content type
+    const contentTypes = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.svg': 'image/svg+xml',
+      '.webp': 'image/webp'
+    };
+    
+    const contentType = contentTypes[extension] || 'image/png';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 hour cache
+    
+    const stream = fs.createReadStream(logoPath);
+    stream.pipe(res);
+  } catch (error) {
+    console.error('Logo serve error:', error);
+    res.status(500).json({ error: 'Fehler beim Laden des Logos' });
   }
 });
 
