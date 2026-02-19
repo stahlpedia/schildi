@@ -231,4 +231,37 @@ db.exec(`
   );
 `);
 
+// Create media tables for media library
+db.exec(`
+  CREATE TABLE IF NOT EXISTS media_folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    parent_id INTEGER,
+    is_system INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS media_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    folder_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    filepath TEXT NOT NULL,
+    mimetype TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    width INTEGER,
+    height INTEGER,
+    tags TEXT DEFAULT '[]',
+    alt_text TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (folder_id) REFERENCES media_folders(id)
+  );
+`);
+
+// Seed media system folders if empty
+const mediaFolderCount = db.prepare('SELECT COUNT(*) as c FROM media_folders').get();
+if (mediaFolderCount.c === 0) {
+  db.prepare("INSERT INTO media_folders (name, parent_id, is_system) VALUES (?, ?, ?)").run('Generiert', null, 1);
+  db.prepare("INSERT INTO media_folders (name, parent_id, is_system) VALUES (?, ?, ?)").run('Persönlicher Stock', null, 1);
+}
+
 module.exports = db;

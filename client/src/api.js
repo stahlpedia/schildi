@@ -183,3 +183,39 @@ export const admin = {
   },
   deleteLogo: () => api('/admin/branding/logo', { method: 'DELETE' }),
 };
+
+export const media = {
+  folders: () => api('/media/folders'),
+  createFolder: (data) => api('/media/folders', { method: 'POST', body: JSON.stringify(data) }),
+  updateFolder: (id, data) => api(`/media/folders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteFolder: (id, confirm = false) => api(`/media/folders/${id}?confirm=${confirm}`, { method: 'DELETE' }),
+  files: (params) => {
+    const queryString = new URLSearchParams();
+    Object.keys(params || {}).forEach(key => {
+      if (params[key] !== undefined && params[key] !== '') {
+        queryString.append(key, params[key]);
+      }
+    });
+    return api(`/media/files${queryString.toString() ? '?' + queryString.toString() : ''}`);
+  },
+  upload: async (file, folderId, tags = []) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folderId', folderId);
+    formData.append('tags', JSON.stringify(tags));
+    
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${BASE}/media/files/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    
+    if (res.status === 401) { logout(); window.location.reload(); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  updateFile: (id, data) => api(`/media/files/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteFile: (id) => api(`/media/files/${id}`, { method: 'DELETE' }),
+  serve: (id) => `${BASE}/media/files/${id}/serve`,
+};

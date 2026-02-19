@@ -29,6 +29,28 @@ app.use('/api/pages', require('./routes/pages'));
 app.use('/api/attachments', require('./routes/attachments'));
 app.use('/api/admin', require('./routes/admin'));
 
+// Media file serving without auth (before media routes)
+const db = require('./db');
+const fs = require('fs');
+app.get('/api/media/files/:id/serve', (req, res) => {
+  const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
+  if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
+  
+  if (!fs.existsSync(file.filepath)) {
+    return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
+  }
+  
+  res.setHeader('Content-Type', file.mimetype);
+  res.setHeader('Content-Length', file.size);
+  res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
+  
+  const fileStream = fs.createReadStream(file.filepath);
+  fileStream.pipe(res);
+});
+
+// Media routes (with auth)
+app.use('/api/media', require('./routes/media'));
+
 // Serve frontend in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDist));

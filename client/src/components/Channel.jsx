@@ -23,6 +23,9 @@ export default function Channel({ onUpdate }) {
   const [newChName, setNewChName] = useState('')
   const [newChModelId, setNewChModelId] = useState('')
   const [models, setModels] = useState([])
+  // Channel editing
+  const [editingChannel, setEditingChannel] = useState(null)
+  const [editChannelName, setEditChannelName] = useState('')
   // CardModal for creating tasks from messages
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [taskFromMessage, setTaskFromMessage] = useState('')
@@ -82,6 +85,28 @@ export default function Channel({ onUpdate }) {
     } catch (e) {
       alert('Fehler: ' + e.message)
     }
+  }
+
+  const handleEditChannel = (channel) => {
+    setEditingChannel(channel.id)
+    setEditChannelName(channel.name)
+  }
+
+  const handleSaveChannelEdit = async () => {
+    if (!editChannelName.trim() || !editingChannel) return
+    try {
+      await chatChannels.update(editingChannel, { name: editChannelName })
+      setEditingChannel(null)
+      setEditChannelName('')
+      await loadChannels()
+    } catch (e) {
+      alert('Fehler beim Umbenennen: ' + e.message)
+    }
+  }
+
+  const handleCancelChannelEdit = () => {
+    setEditingChannel(null)
+    setEditChannelName('')
   }
 
   // Conversation CRUD
@@ -193,39 +218,83 @@ export default function Channel({ onUpdate }) {
   return (
     <div>
       {/* Channel selector bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 bg-gray-900 rounded-xl border border-gray-800 px-4 py-3 mb-4">
-        <div className="flex items-center gap-3 flex-1">
-          <button 
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="md:hidden p-2 text-gray-400 hover:text-white transition-colors"
-            title="Conversations toggle"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </button>
-          <span className="text-lg">💬</span>
-          <select value={selectedChannel || ''} onChange={e => setSelectedChannel(+e.target.value || null)}
-            className="flex-1 md:flex-none px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500">
-            <option value="">Channel wählen...</option>
-            {channels.map(ch => (
-              <option key={ch.id} value={ch.id}>{ch.type === 'model' ? '🤖' : '🐢'} {ch.name}</option>
-            ))}
-          </select>
-          {currentChannel?.model_id && (
-            <span className="hidden md:inline text-[10px] bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full">{currentChannel.model_id}</span>
-          )}
+      <div className="bg-gray-900 rounded-xl border border-gray-800 px-4 py-3 mb-4">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 mb-3">
+          <div className="flex items-center gap-3 flex-1">
+            <button 
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="md:hidden p-2 text-gray-400 hover:text-white transition-colors"
+              title="Conversations toggle"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </button>
+            <span className="text-lg">💬</span>
+            <span className="text-sm font-semibold text-gray-300">Channels</span>
+            {currentChannel?.model_id && (
+              <span className="hidden md:inline text-[10px] bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full">{currentChannel.model_id}</span>
+            )}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => setShowChannelModal(true)}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Channel</button>
+            {selectedChannel && currentChannel && !currentChannel.is_default && (
+              <button onClick={handleDeleteChannel}
+                className="px-3 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-xs transition-colors">🗑️ Löschen</button>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setShowChannelModal(true)}
-            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Channel</button>
-          {selectedChannel && currentChannel && !currentChannel.is_default && (
-            <button onClick={handleDeleteChannel}
-              className="px-3 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-xs transition-colors">🗑️ Löschen</button>
-          )}
+        
+        {/* Channel List */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          {channels.map(ch => (
+            <div key={ch.id} className={`flex items-center gap-2 p-2 rounded-lg border transition-colors cursor-pointer ${
+              selectedChannel === ch.id ? 'bg-emerald-800/30 border-emerald-500' : 'bg-gray-800 border-gray-700 hover:border-gray-600'
+            }`}>
+              <div className="flex-1 flex items-center gap-2" onClick={() => setSelectedChannel(ch.id)}>
+                <span>{ch.type === 'model' ? '🤖' : '🐢'}</span>
+                {editingChannel === ch.id ? (
+                  <input
+                    value={editChannelName}
+                    onChange={e => setEditChannelName(e.target.value)}
+                    className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSaveChannelEdit()
+                      if (e.key === 'Escape') handleCancelChannelEdit()
+                    }}
+                    onBlur={handleSaveChannelEdit}
+                    autoFocus
+                    onClick={e => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="flex-1 text-sm truncate">{ch.name}</span>
+                )}
+              </div>
+              <div className="flex gap-1">
+                {editingChannel === ch.id ? (
+                  <>
+                    <button onClick={handleSaveChannelEdit} className="text-emerald-400 hover:text-emerald-300 text-xs px-1" title="Speichern">
+                      ✓
+                    </button>
+                    <button onClick={handleCancelChannelEdit} className="text-gray-400 hover:text-gray-300 text-xs px-1" title="Abbrechen">
+                      ✕
+                    </button>
+                  </>
+                ) : (
+                  !ch.is_default && ch.type !== 'agent' && (
+                    <button onClick={(e) => { e.stopPropagation(); handleEditChannel(ch) }} className="text-gray-400 hover:text-blue-400 text-xs px-1" title="Umbenennen">
+                      ✏️
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          ))}
         </div>
+        
         {currentChannel?.model_id && (
-          <span className="md:hidden text-[10px] bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full text-center">{currentChannel.model_id}</span>
+          <span className="md:hidden text-[10px] bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full text-center mt-2 inline-block">{currentChannel.model_id}</span>
         )}
       </div>
 
