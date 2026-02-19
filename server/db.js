@@ -270,20 +270,20 @@ try {
 try {
   db.prepare('SELECT updated_at FROM media_files LIMIT 1').get();
 } catch {
-  db.exec("ALTER TABLE media_files ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+  db.exec("ALTER TABLE media_files ADD COLUMN updated_at TEXT");
 }
 
 // Migrate: add settings updated_at column if missing
 try {
   db.prepare('SELECT updated_at FROM settings LIMIT 1').get();
 } catch {
-  db.exec("ALTER TABLE settings ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+  db.exec("ALTER TABLE settings ADD COLUMN updated_at TEXT");
 }
 
 try {
   db.prepare('SELECT created_at FROM settings LIMIT 1').get();
 } catch {
-  db.exec("ALTER TABLE settings ADD COLUMN created_at TEXT DEFAULT (datetime('now'))");
+  db.exec("ALTER TABLE settings ADD COLUMN created_at TEXT");
 }
 
 // Seed media system folders if empty
