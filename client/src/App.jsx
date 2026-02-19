@@ -15,6 +15,7 @@ export default function App() {
   const [unansweredCount, setUnansweredCount] = useState(0)
   const [highlightTaskId, setHighlightTaskId] = useState(null)
   const [selectedBoardId, setSelectedBoardId] = useState(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const checkUnanswered = async () => {
     try {
@@ -41,19 +42,26 @@ export default function App() {
     setTab('Kanban')
   }
 
+  const handleTabChange = (newTab) => {
+    setTab(newTab)
+    setMobileMenuOpen(false) // Close mobile menu when tab is selected
+  }
+
   if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
-      <header className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+      <header className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-3xl">🐢</span>
-          <h1 className="text-xl font-bold">Schildi Dashboard</h1>
+          <span className="text-2xl md:text-3xl">🐢</span>
+          <h1 className="text-lg md:text-xl font-bold">Schildi Dashboard</h1>
         </div>
-        <div className="flex items-center gap-4">
+        
+        {/* Desktop Navigation */}
+        <div className="hidden md:flex items-center gap-4">
           <nav className="flex gap-1">
             {TABS.map(t => (
-              <button key={t} onClick={() => setTab(t)}
+              <button key={t} onClick={() => handleTabChange(t)}
                 className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   tab === t ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                 }`}>
@@ -69,8 +77,48 @@ export default function App() {
           <button onClick={() => { logout(); setLoggedIn(false) }}
             className="text-sm text-gray-500 hover:text-red-400 transition-colors">Logout</button>
         </div>
+
+        {/* Mobile Hamburger */}
+        <div className="md:hidden flex items-center gap-2">
+          <button onClick={() => { logout(); setLoggedIn(false) }}
+            className="text-sm text-gray-500 hover:text-red-400 transition-colors p-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 text-gray-400 hover:text-white transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={mobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+            </svg>
+          </button>
+        </div>
+
+        {/* Mobile Menu Overlay */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 bg-black/60 z-50 md:hidden" onClick={() => setMobileMenuOpen(false)}>
+            <div className="absolute top-16 right-4 left-4 bg-gray-900 border border-gray-700 rounded-xl shadow-xl py-2" onClick={e => e.stopPropagation()}>
+              {TABS.map(t => (
+                <button key={t} onClick={() => handleTabChange(t)}
+                  className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                    tab === t ? 'bg-emerald-600 text-white' : 'text-gray-300 hover:bg-gray-800'
+                  }`}>
+                  <span className="font-medium">{t}</span>
+                  {t === 'Channels' && unansweredCount > 0 && (
+                    <span className="w-5 h-5 bg-red-500 rounded-full text-xs font-bold flex items-center justify-center text-white">
+                      {unansweredCount}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
-      <main className="p-6">
+      
+      <main className="p-3 md:p-6">
         <div style={{ display: tab === 'Kanban' ? 'block' : 'none' }}>
           <KanbanBoard highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
         </div>

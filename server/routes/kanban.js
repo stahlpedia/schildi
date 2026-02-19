@@ -213,6 +213,30 @@ router.post('/tasks/:id/execute', async (req, res) => {
   }
 
   try {
+    // Get attachments for this task
+    const taskAttachments = db.prepare(`
+      SELECT filename, filepath FROM attachments 
+      WHERE entity_type = 'card' AND entity_id = ?
+      ORDER BY created_at ASC
+    `).all(req.params.id);
+
+    let content = `Bearbeite diesen Task:\n\nTitle: ${task.title}\nDescription: ${task.description}`;
+
+    // Add attachment info if present
+    if (taskAttachments.length > 0) {
+      content += '\n\nAngehängte Dateien:';
+      const path = require('path');
+      const attachmentsDir = path.join(__dirname, '..', 'data', 'attachments');
+      
+      for (const attachment of taskAttachments) {
+        const fullPath = path.join(attachmentsDir, attachment.filepath);
+        content += `\n- ${attachment.filename} (Pfad: ${fullPath})`;
+      }
+      content += '\n\nLies die angehängten Dateien und nutze sie als Kontext.';
+    }
+
+    content += '\n\nFühre die beschriebene Aufgabe aus.';
+
     const response = await fetch(`${OPENCLAW_URL}/v1/chat/completions`, {
       method: 'POST',
       headers: {
@@ -224,7 +248,7 @@ router.post('/tasks/:id/execute', async (req, res) => {
         model: 'openclaw:main',
         messages: [{
           role: 'user',
-          content: `Bearbeite diesen Task:\n\nTitle: ${task.title}\nDescription: ${task.description}\n\nFühre die beschriebene Aufgabe aus.`
+          content
         }],
         user: `schildi-dashboard-task-${task.id}`
       })

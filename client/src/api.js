@@ -99,3 +99,26 @@ export const channel = {
   agentUnread: () => api('/channel/agent-unread'),
   markAgentRead: (convoId) => api(`/channel/conversations/${convoId}/agent-read`, { method: 'POST' }),
 };
+
+export const attachments = {
+  list: (entityType, entityId) => api(`/attachments?entity_type=${entityType}&entity_id=${entityId}`),
+  upload: async (file, entityType, entityId) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('entity_type', entityType);
+    formData.append('entity_id', entityId);
+    
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${BASE}/attachments/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    
+    if (res.status === 401) { logout(); window.location.reload(); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  download: (id) => `${BASE}/attachments/${id}`,
+  remove: (id) => api(`/attachments/${id}`, { method: 'DELETE' }),
+};

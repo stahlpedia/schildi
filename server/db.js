@@ -209,4 +209,18 @@ try {
   db.exec('ALTER TABLE cards ADD COLUMN result TEXT');
 }
 
+// Create attachments table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type TEXT NOT NULL CHECK(entity_type IN ('card', 'message')),
+    entity_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    filepath TEXT NOT NULL,
+    mimetype TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
 module.exports = db;
