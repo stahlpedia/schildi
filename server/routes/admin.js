@@ -11,26 +11,6 @@ const { authenticate } = require('../auth');
 const router = express.Router();
 const execAsync = promisify(exec);
 
-// Configure multer for file uploads
-const upload = multer({ 
-  dest: path.join(__dirname, '../../temp/'),
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
-});
-
-// Configure multer for branding logo uploads (2MB limit)
-const uploadLogo = multer({ 
-  dest: tempDir, // Use temp dir to avoid cross-device rename issues
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Nur Bilder sind erlaubt (PNG, JPG, SVG, WebP)'));
-    }
-  }
-});
-
 // Ensure temp and branding directories exist
 const tempDir = path.join(__dirname, '../../temp/');
 if (!fs.existsSync(tempDir)) {
@@ -41,6 +21,26 @@ const brandingDir = path.join(__dirname, '../../data/branding/');
 if (!fs.existsSync(brandingDir)) {
   fs.mkdirSync(brandingDir, { recursive: true });
 }
+
+// Configure multer for file uploads
+const upload = multer({ 
+  dest: tempDir,
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+});
+
+// Configure multer for branding logo uploads (2MB limit)
+const uploadLogo = multer({ 
+  dest: tempDir,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Nur Bilder sind erlaubt (PNG, JPG, SVG, WebP)'));
+    }
+  }
+});
 
 // Serve logo file BEFORE auth middleware (loaded via <img src>, no token)
 router.get('/branding/logo-file', (req, res) => {
