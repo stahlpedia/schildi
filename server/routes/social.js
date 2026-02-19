@@ -393,7 +393,8 @@ router.post('/render/save', async (req, res) => {
     
     // Speichere Datei
     const fname = filename || `social-${template}-${Date.now()}.png`;
-    const mediaDir = path.join(__dirname, '../../data/media/', String(folder.id));
+    const baseMediaDir = process.env.MEDIA_DIR || path.join(__dirname, '../../data/media');
+    const mediaDir = path.join(baseMediaDir, String(folder.id));
     fs.mkdirSync(mediaDir, { recursive: true });
     const filepath = path.join(mediaDir, fname);
     fs.writeFileSync(filepath, png);

@@ -9,7 +9,9 @@ services:
       - DASHBOARD_PASSWORD=changeme
       - JWT_SECRET=change-this-to-a-random-string
       - WORKSPACE_PATH=/workspace
+      - MEDIA_DIR=/media
     volumes:
       - ./data:/app/data
       - /home/node/.openclaw/workspace:/workspace:ro
+      - ./shared/media:/media
     restart: unless-stopped

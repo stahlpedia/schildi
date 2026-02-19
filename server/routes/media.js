@@ -8,8 +8,8 @@ const fs = require('fs');
 const router = Router();
 router.use(authenticate);
 
-// Create media directory if it doesn't exist
-const mediaDir = path.join(__dirname, '..', 'data', 'media');
+// Media directory: shared volume between OpenClaw and Dashboard
+const mediaDir = process.env.MEDIA_DIR || path.join(__dirname, '..', 'data', 'media');
 fs.mkdirSync(mediaDir, { recursive: true });
 
 // Multer configuration for file uploads
