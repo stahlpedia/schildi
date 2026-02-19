@@ -50,6 +50,7 @@ app.get('/api/media/files/:id/serve', (req, res) => {
 
 // Media routes (with auth)
 app.use('/api/media', require('./routes/media'));
+app.use('/api/social', require('./routes/social'));
 
 // Serve frontend in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

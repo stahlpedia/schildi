@@ -7,8 +7,9 @@ import Logbuch from './components/Logbuch'
 import Channel from './components/Channel'
 import Pages from './components/Pages'
 import MediaLibrary from './components/MediaLibrary'
+import SocialMedia from './components/SocialMedia'
 
-const TABS = ['Kanban', 'Channels', 'Pages', 'Medien', 'Admin']
+const TABS = ['Kanban', 'Channels', 'Pages', 'Medien', 'Social', 'Admin']
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn())
@@ -101,7 +102,7 @@ export default function App() {
                 className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   tab === t ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                 }`}>
-                {t === 'Admin' ? '⚙️' : t === 'Medien' ? '🖼️' : t}
+                {t === 'Admin' ? '⚙️' : t === 'Medien' ? '🖼️' : t === 'Social' ? '📱 Social' : t}
                 {t === 'Channels' && unansweredCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white">
                     {unansweredCount}
@@ -134,7 +135,7 @@ export default function App() {
                     tab === t ? 'bg-emerald-600 text-white' : 'text-gray-300 hover:bg-gray-800'
                   }`}>
                   <span className="font-medium">
-                    {t === 'Admin' ? '⚙️ Admin' : t === 'Medien' ? '🖼️ Medien' : t}
+                    {t === 'Admin' ? '⚙️ Admin' : t === 'Medien' ? '🖼️ Medien' : t === 'Social' ? '📱 Social' : t}
                   </span>
                   {t === 'Channels' && unansweredCount > 0 && (
                     <span className="w-5 h-5 bg-red-500 rounded-full text-xs font-bold flex items-center justify-center text-white">
@@ -155,6 +156,7 @@ export default function App() {
         <div style={{ display: tab === 'Channels' ? 'block' : 'none' }}><Channel onUpdate={checkUnanswered} /></div>
         <div style={{ display: tab === 'Pages' ? 'block' : 'none' }}><Pages onNavigateToKanban={handleNavigateToKanban} /></div>
         <div style={{ display: tab === 'Medien' ? 'block' : 'none' }}><MediaLibrary /></div>
+        <div style={{ display: tab === 'Social' ? 'block' : 'none' }}><SocialMedia /></div>
         <div style={{ display: tab === 'Admin' ? 'block' : 'none' }}><Admin onLogout={() => { logout(); setLoggedIn(false) }} /></div>
       </main>
     </div>
