@@ -119,14 +119,20 @@ router.post('/conversations/:id/messages', async (req, res) => {
     }
   }
 
-  // If model channel + user message → call OpenWebUI
+  // If model channel + user message → call n8n webhook (or OpenWebUI fallback)
   if (convo.ch_type === 'model' && author === 'user' && convo.ch_model_id) {
+    const N8N_CHAT_URL = process.env.N8N_CHAT_URL || 'https://x3n.stahlpedia.de/webhook/v1/chat/completions';
+    const DASHBOARD_ID = process.env.DASHBOARD_ID || 'schildi-dashboard';
     try {
       const history = db.prepare('SELECT author, text FROM messages WHERE conversation_id = ? ORDER BY created_at ASC').all(req.params.id);
       const chatMessages = history.map(m => ({ role: m.author === 'user' ? 'user' : 'assistant', content: m.text }));
-      const response = await fetch(`${OPENWEBUI_URL}/api/chat/completions`, {
+      const response = await fetch(N8N_CHAT_URL, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${OPENWEBUI_API_KEY}`, 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Dashboard-Id': DASHBOARD_ID,
+          'Origin': 'https://agent.stahlpedia.de'
+        },
         body: JSON.stringify({ model: convo.ch_model_id, messages: chatMessages })
       });
       if (!response.ok) {
@@ -189,6 +195,27 @@ router.delete('/conversations/:id', (req, res) => {
 });
 
 router.get('/models', async (req, res) => {
+  // Try n8n webhook first (preferred), then fall back to OpenWebUI
+  const N8N_MODELS_URL = process.env.N8N_MODELS_URL || 'https://x3n.stahlpedia.de/webhook/v1/models';
+  const DASHBOARD_ID = process.env.DASHBOARD_ID || 'schildi-dashboard';
+
+  try {
+    const response = await fetch(N8N_MODELS_URL, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Dashboard-Id': DASHBOARD_ID,
+        'Origin': 'https://agent.stahlpedia.de'
+      }
+    });
+    if (!response.ok) throw new Error('n8n models failed');
+    const data = await response.json();
+    const models = (data.data || data || []).map(m => ({ id: m.id, name: m.name || m.id }));
+    if (models.length > 0) return res.json(models);
+  } catch (e) {
+    console.warn('n8n models fetch failed:', e.message);
+  }
+
+  // Fallback: OpenWebUI
   if (!OPENWEBUI_API_KEY) return res.json([]);
   try {
     const response = await fetch(`${OPENWEBUI_URL}/api/models`, { headers: { 'Authorization': `Bearer ${OPENWEBUI_API_KEY}` } });
