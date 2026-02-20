@@ -120,7 +120,7 @@ export default function App() {
   const projectId = currentProject?.id
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-gray-950 text-gray-100 overflow-x-hidden max-w-[100vw]">
       <header className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {branding.logoUrl ? (
@@ -259,7 +259,8 @@ export default function App() {
             <div className="mb-4 flex items-center gap-3">
               <label className="text-sm text-gray-400">Farbe:</label>
               <input type="color" value={newProjectColor} onChange={e => setNewProjectColor(e.target.value)}
-                className="w-10 h-8 bg-gray-800 border border-gray-700 rounded cursor-pointer" />
+                className="w-10 h-10 bg-transparent border-0 rounded cursor-pointer p-0"
+                style={{ WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' }} />
               <span className="w-4 h-4 rounded-full" style={{ backgroundColor: newProjectColor }} />
             </div>
             <div className="flex gap-2">

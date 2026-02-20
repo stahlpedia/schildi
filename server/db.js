@@ -266,6 +266,29 @@ if (!columnExists('boards', 'project_id')) {
 // Ensure all boards have project_id
 db.prepare('UPDATE boards SET project_id = ? WHERE project_id IS NULL').run(DEFAULT_PROJECT_ID);
 
+// --- Rebuild boards table to fix UNIQUE constraint (slug → slug+project_id) ---
+try {
+  const boardsInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='boards'").get();
+  if (boardsInfo && boardsInfo.sql && !boardsInfo.sql.includes('UNIQUE(slug, project_id)') && !boardsInfo.sql.includes('UNIQUE( slug, project_id )')) {
+    db.exec(`
+      CREATE TABLE boards_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'custom',
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(slug, project_id)
+      );
+      INSERT INTO boards_new SELECT id, project_id, name, slug, type, created_at FROM boards;
+      DROP TABLE boards;
+      ALTER TABLE boards_new RENAME TO boards;
+    `);
+  }
+} catch (e) {
+  console.warn('Boards constraint migration skipped:', e.message);
+}
+
 // --- Migrate columns: ensure board_id exists ---
 if (!columnExists('columns', 'board_id')) {
   db.exec('ALTER TABLE columns ADD COLUMN board_id INTEGER');
@@ -298,8 +321,30 @@ if (!columnExists('chat_channels', 'project_id')) {
 }
 db.prepare('UPDATE chat_channels SET project_id = ? WHERE project_id IS NULL').run(DEFAULT_PROJECT_ID);
 
-// Fix chat_channels unique constraint if needed (old: UNIQUE(slug), new: UNIQUE(slug, project_id))
-// SQLite can't alter constraints, but since we're adding project_id the old unique on slug still works
+// --- Rebuild chat_channels table to fix UNIQUE constraint (slug → slug+project_id) ---
+try {
+  const chInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='chat_channels'").get();
+  if (chInfo && chInfo.sql && !chInfo.sql.includes('UNIQUE(slug, project_id)') && !chInfo.sql.includes('UNIQUE( slug, project_id )')) {
+    db.exec(`
+      CREATE TABLE chat_channels_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'agent',
+        model_id TEXT DEFAULT '',
+        is_default INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(slug, project_id)
+      );
+      INSERT INTO chat_channels_new SELECT id, project_id, name, slug, type, model_id, is_default, created_at FROM chat_channels;
+      DROP TABLE chat_channels;
+      ALTER TABLE chat_channels_new RENAME TO chat_channels;
+    `);
+  }
+} catch (e) {
+  console.warn('Chat channels constraint migration skipped:', e.message);
+}
 
 // --- Migrate conversations ---
 if (!columnExists('conversations', 'agent_unread')) {
