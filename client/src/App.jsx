@@ -120,9 +120,9 @@ export default function App() {
   const projectId = currentProject?.id
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 overflow-x-hidden">
-      <header className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3 min-w-0">
+    <div className="min-h-screen bg-gray-950 text-gray-100">
+      <header className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between max-w-full overflow-visible">
+        <div className="flex items-center gap-3 min-w-0 shrink">
           {branding.logoUrl ? (
             <img 
               src={branding.logoUrl} 
@@ -183,11 +183,11 @@ export default function App() {
         </div>
         
         {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center min-w-0 overflow-x-auto">
-          <nav className="flex gap-0.5 flex-shrink-0">
+        <div className="hidden md:flex items-center shrink-0">
+          <nav className="flex gap-0.5">
             {TABS.map(t => (
               <button key={t} onClick={() => handleTabChange(t)}
-                className={`relative px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`relative px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                   tab === t ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                 }`}>
                 {t === 'Admin' ? '⚙️' : t}

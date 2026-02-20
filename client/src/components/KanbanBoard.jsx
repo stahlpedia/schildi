@@ -57,7 +57,8 @@ export default function KanbanBoard(props = {}) {
     const month = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, '0')}`
     try {
       const data = await projectCalendar(projectId, month)
-      setCalendarCards(data)
+      // Filter by selected board if one is active
+      setCalendarCards(selectedBoard ? data.filter(c => c.board_id === selectedBoard) : data)
     } catch (e) {
       // Fallback: filter local cards by due_date
       setCalendarCards(cards.filter(c => c.due_date))
@@ -66,7 +67,7 @@ export default function KanbanBoard(props = {}) {
 
   useEffect(() => { setSelectedBoard(null); loadBoards() }, [projectId])
   useEffect(() => { if (selectedBoard) load() }, [selectedBoard])
-  useEffect(() => { if (viewMode === 'calendar') loadCalendar() }, [viewMode, calendarDate, projectId])
+  useEffect(() => { if (viewMode === 'calendar') loadCalendar() }, [viewMode, calendarDate, projectId, selectedBoard])
   
   useEffect(() => {
     if (props.selectedBoardId && !selectedBoard) setSelectedBoard(props.selectedBoardId)
@@ -134,7 +135,7 @@ export default function KanbanBoard(props = {}) {
   const handleCreateBoard = async () => {
     if (!newBoardName.trim()) return
     try {
-      const board = await boards.create({ name: newBoardName })
+      const board = await boards.create({ name: newBoardName, project_id: projectId })
       setNewBoardName(''); setShowBoardModal(false)
       await loadBoards()
       if (board?.id) setSelectedBoard(board.id)
