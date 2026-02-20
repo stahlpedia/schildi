@@ -211,7 +211,7 @@ export default function Social({ projectId }) {
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 bg-gray-900 rounded-xl border border-gray-800 px-4 py-3 mb-4 shrink-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Channel Selector */}
-          <div className="relative flex-1 min-w-0">
+          <div className="relative flex-1 min-w-0 max-w-xs">
             <button
               onClick={() => setShowChannelDropdown(!showChannelDropdown)}
               className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white hover:border-gray-600 transition-colors"

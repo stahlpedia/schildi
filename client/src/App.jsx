@@ -120,7 +120,7 @@ export default function App() {
   const projectId = currentProject?.id
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 w-screen max-w-full">
+    <div className="min-h-screen bg-gray-950 text-gray-100 overflow-x-hidden max-w-[100vw]">
       <header className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0 shrink">
           {branding.logoUrl ? (
@@ -139,8 +139,6 @@ export default function App() {
           ) : (
             <span className="text-2xl md:text-3xl">🐢</span>
           )}
-          <h1 className="text-lg md:text-xl font-bold hidden sm:block">{branding.title}</h1>
-          
           {/* Project Switcher */}
           <div className="relative ml-2">
             <button 

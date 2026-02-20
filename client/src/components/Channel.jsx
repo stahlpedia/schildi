@@ -268,7 +268,7 @@ export default function Channel({ projectId, onUpdate }) {
               <select
                 value={selectedChannel || ''}
                 onChange={e => setSelectedChannel(Number(e.target.value))}
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer"
+                className="flex-1 max-w-xs px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer"
               >
                 {channels.map(ch => (
                   <option key={ch.id} value={ch.id}>
