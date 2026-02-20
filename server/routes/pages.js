@@ -89,16 +89,21 @@ router.post('/domains', async (req, res) => {
   if (!domainName || !isValidDomain(domainName)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
 
   const domainDir = path.join(WEBSITES_DIR, domainName);
-  if (fs.existsSync(domainDir) && !projectId) return res.status(409).json({ error: 'Domain existiert bereits' });
 
   try {
+    if (projectId) {
+      // Project-scoped: check DB only
+      const existing = db.prepare('SELECT id FROM pages_domains WHERE domain = ?').get(domainName);
+      if (existing) return res.status(409).json({ error: 'Domain existiert bereits' });
+    } else {
+      // Legacy: check filesystem
+      if (fs.existsSync(domainDir)) return res.status(409).json({ error: 'Domain existiert bereits' });
+    }
+
     fs.mkdirSync(domainDir, { recursive: true });
     await registerCaddyRoute(domainName);
 
     if (projectId) {
-      // Also create DB record
-      const existing = db.prepare('SELECT id FROM pages_domains WHERE domain = ?').get(domainName);
-      if (existing) return res.status(409).json({ error: 'Domain existiert bereits' });
       const result = db.prepare('INSERT INTO pages_domains (project_id, domain) VALUES (?, ?)').run(projectId, domainName);
       return res.status(201).json(db.prepare('SELECT * FROM pages_domains WHERE id = ?').get(result.lastInsertRowid));
     }
