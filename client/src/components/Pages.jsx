@@ -154,7 +154,8 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   const loadDomains = async () => {
     try {
       const list = await pApi.domains()
-      setDomains(list)
+      // Normalize: project-scoped returns {domain, id, ...}, legacy returns {name}
+      setDomains(list.map(d => ({ ...d, name: d.domain || d.name })))
     } catch (e) { setError(e.message) }
   }
 
@@ -313,7 +314,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
           <select value={selectedDomain} onChange={e => setSelectedDomain(e.target.value)}
             className="flex-1 md:flex-none px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500">
             <option value="">Domain wählen...</option>
-            {domains.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
+            {domains.map(d => <option key={d.domain || d.name} value={d.domain || d.name}>{d.domain || d.name}</option>)}
           </select>
         </div>
         <div className="flex gap-2 flex-wrap">
