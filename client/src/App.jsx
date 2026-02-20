@@ -120,8 +120,8 @@ export default function App() {
   const projectId = currentProject?.id
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      <header className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between max-w-full overflow-visible">
+    <div className="min-h-screen bg-gray-950 text-gray-100 w-screen max-w-full">
+      <header className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0 shrink">
           {branding.logoUrl ? (
             <img 
@@ -237,7 +237,7 @@ export default function App() {
         )}
       </header>
       
-      <main className="p-3 md:p-6 max-w-full overflow-x-auto">
+      <main className="p-3 md:p-6 max-w-full overflow-x-hidden">
         <div style={{ display: tab === 'Kanban' ? 'block' : 'none' }}>
           <KanbanBoard projectId={projectId} highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
         </div>
