@@ -121,8 +121,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 overflow-x-hidden max-w-[100vw]">
-      <header className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <header className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between overflow-x-hidden">
+        <div className="flex items-center gap-3 min-w-0 shrink-0">
           {branding.logoUrl ? (
             <img 
               src={branding.logoUrl} 
@@ -183,11 +183,11 @@ export default function App() {
         </div>
         
         {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center gap-4">
-          <nav className="flex gap-1">
+        <div className="hidden md:flex items-center">
+          <nav className="flex gap-0.5 flex-shrink-0">
             {TABS.map(t => (
               <button key={t} onClick={() => handleTabChange(t)}
-                className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`relative px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                   tab === t ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                 }`}>
                 {t === 'Admin' ? '⚙️' : t}

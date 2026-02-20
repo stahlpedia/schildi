@@ -140,9 +140,20 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   const mode = selectedFile ? getMode(selectedFile.name) : 'htmlmixed'
   const { loaded: cmLoaded } = useCodeMirror(cmRef, editorContent, setEditorContent, mode, !!selectedFile)
 
+  const pApi = projectId ? {
+    domains: () => projectPages.domains(projectId),
+    files: (d) => projectPages.files(projectId, d),
+    readFile: (d, p) => projectPages.readFile(projectId, d, p),
+    createDomain: (n) => projectPages.createDomain(projectId, n),
+    deleteDomain: (n) => projectPages.deleteDomain(projectId, n),
+    createFile: (d, p, c) => projectPages.createFile(projectId, d, p, c),
+    updateFile: (d, p, c) => projectPages.updateFile(projectId, d, p, c),
+    deleteFile: (d, p) => projectPages.deleteFile(projectId, d, p),
+  } : pages
+
   const loadDomains = async () => {
     try {
-      const list = await pages.domains()
+      const list = await pApi.domains()
       setDomains(list)
     } catch (e) { setError(e.message) }
   }
@@ -150,7 +161,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   const loadFiles = async (domain) => {
     if (!domain) { setFileTree([]); return }
     try {
-      const tree = await pages.files(domain)
+      const tree = await pApi.files(domain)
       setFileTree(tree)
     } catch (e) { setFileTree([]); setError(e.message) }
   }
@@ -158,7 +169,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   const loadFile = async (entry) => {
     if (!selectedDomain) return
     try {
-      const data = await pages.readFile(selectedDomain, entry.path)
+      const data = await pApi.readFile(selectedDomain, entry.path)
       setSelectedFile(entry)
       setFileContent(data.content)
       setEditorContent(data.content)
@@ -206,13 +217,13 @@ export default function Pages({ projectId, onNavigateToKanban }) {
     setEditorContent(prev => prev + '\n' + tag)
   }
 
-  useEffect(() => { loadDomains(); loadPagesBoard() }, [])
+  useEffect(() => { setSelectedDomain(null); setSelectedFile(null); setFileTree([]); loadDomains(); loadPagesBoard() }, [projectId])
   useEffect(() => { if (selectedDomain) { loadFiles(selectedDomain); setSelectedFile(null) } }, [selectedDomain])
 
   const handleCreateDomain = async () => {
     if (!newDomainName.trim()) return
     try {
-      await pages.createDomain(newDomainName.trim())
+      await pApi.createDomain(newDomainName.trim())
       setShowNewDomain(false)
       setNewDomainName('')
       await loadDomains()
@@ -223,7 +234,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   const handleDeleteDomain = async () => {
     if (!selectedDomain || !confirm(`Domain "${selectedDomain}" wirklich löschen?`)) return
     try {
-      await pages.deleteDomain(selectedDomain)
+      await pApi.deleteDomain(selectedDomain)
       setSelectedDomain('')
       setFileTree([])
       setSelectedFile(null)
@@ -234,7 +245,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   const handleCreateFile = async () => {
     if (!selectedDomain || !newFilePath.trim()) return
     try {
-      await pages.createFile(selectedDomain, newFilePath.trim(), '')
+      await pApi.createFile(selectedDomain, newFilePath.trim(), '')
       setShowNewFile(false)
       setNewFilePath('')
       loadFiles(selectedDomain)
@@ -245,7 +256,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
     if (!selectedDomain || !selectedFile) return
     setSaving(true)
     try {
-      await pages.updateFile(selectedDomain, selectedFile.path, editorContent)
+      await pApi.updateFile(selectedDomain, selectedFile.path, editorContent)
       setFileContent(editorContent)
       setError(null)
     } catch (e) { setError(e.message) }
@@ -255,7 +266,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   const handleDeleteFile = async () => {
     if (!selectedDomain || !selectedFile || !confirm(`"${selectedFile.path}" wirklich löschen?`)) return
     try {
-      await pages.deleteFile(selectedDomain, selectedFile.path)
+      await pApi.deleteFile(selectedDomain, selectedFile.path)
       setSelectedFile(null)
       loadFiles(selectedDomain)
     } catch (e) { setError(e.message) }

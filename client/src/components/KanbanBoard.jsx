@@ -36,7 +36,7 @@ export default function KanbanBoard(props = {}) {
     try {
       const list = projectId ? await projectBoards(projectId) : await boards.list()
       setBoardsList(list)
-      if (list.length > 0 && !selectedBoard) setSelectedBoard(list[0].id)
+      if (list.length > 0) setSelectedBoard(list[0].id)
     } catch (e) {
       // Fallback to global boards
       const list = await boards.list()
@@ -64,7 +64,7 @@ export default function KanbanBoard(props = {}) {
     }
   }
 
-  useEffect(() => { loadBoards() }, [projectId])
+  useEffect(() => { setSelectedBoard(null); loadBoards() }, [projectId])
   useEffect(() => { if (selectedBoard) load() }, [selectedBoard])
   useEffect(() => { if (viewMode === 'calendar') loadCalendar() }, [viewMode, calendarDate, projectId])
   
