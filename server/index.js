@@ -20,6 +20,32 @@ app.post('/api/login', (req, res) => {
   res.json({ token, username });
 });
 
+// Media file serving WITHOUT auth (for img src — MUST be before authenticated routers)
+const db = require('./db');
+const fs = require('fs');
+
+app.get('/api/media/file/:id', (req, res) => {
+  const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
+  if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
+  const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..'), file.filepath);
+  if (!fs.existsSync(resolvedPath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
+  res.setHeader('Content-Type', file.mimetype);
+  res.setHeader('Content-Length', file.size);
+  res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
+  fs.createReadStream(resolvedPath).pipe(res);
+});
+
+app.get('/api/media/files/:id/serve', (req, res) => {
+  const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
+  if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
+  const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..'), file.filepath);
+  if (!fs.existsSync(resolvedPath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
+  res.setHeader('Content-Type', file.mimetype);
+  res.setHeader('Content-Length', file.size);
+  res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
+  fs.createReadStream(resolvedPath).pipe(res);
+});
+
 // API Routes
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/kanban', require('./routes/kanban'));
@@ -47,32 +73,6 @@ app.use('/api/media', mediaRouter);
 // Pages: /api/projects/:projectId/pages/*
 const pagesRouter = require('./routes/pages');
 app.use('/api/projects/:projectId/pages', pagesRouter);
-
-// Media file serving without auth (for img src)
-const db = require('./db');
-const fs = require('fs');
-app.get('/api/media/file/:id', (req, res) => {
-  const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
-  if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
-  const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..'), file.filepath);
-  if (!fs.existsSync(resolvedPath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
-  res.setHeader('Content-Type', file.mimetype);
-  res.setHeader('Content-Length', file.size);
-  res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
-  fs.createReadStream(resolvedPath).pipe(res);
-});
-
-// Backward compat: /api/media/files/:id/serve
-app.get('/api/media/files/:id/serve', (req, res) => {
-  const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
-  if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
-  const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..'), file.filepath);
-  if (!fs.existsSync(resolvedPath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
-  res.setHeader('Content-Type', file.mimetype);
-  res.setHeader('Content-Length', file.size);
-  res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
-  fs.createReadStream(resolvedPath).pipe(res);
-});
 
 // Serve frontend in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
