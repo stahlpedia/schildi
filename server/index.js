@@ -21,6 +21,7 @@ app.post('/api/login', (req, res) => {
 });
 
 // API Routes
+app.use('/api/projects', require('./routes/projects'));
 app.use('/api/kanban', require('./routes/kanban'));
 app.use('/api/memory', require('./routes/memory'));
 app.use('/api/log', require('./routes/log'));
@@ -29,28 +30,56 @@ app.use('/api/pages', require('./routes/pages'));
 app.use('/api/attachments', require('./routes/attachments'));
 app.use('/api/admin', require('./routes/admin'));
 
-// Media file serving without auth (before media routes)
+// Project-scoped route mounts
+// Kanban: /api/projects/:projectId/boards, /api/projects/:projectId/calendar
+app.use('/api', require('./routes/kanban'));
+
+// Social: /api/projects/:projectId/social/*
+const socialRouter = require('./routes/social');
+app.use('/api/projects/:projectId/social', (req, res, next) => {
+  req.params.projectId = req.params.projectId;
+  next();
+}, socialRouter);
+app.use('/api/social', socialRouter);
+
+// Context (Media): /api/projects/:projectId/context/*
+const mediaRouter = require('./routes/media');
+app.use('/api/projects/:projectId/context', (req, res, next) => {
+  req.params.projectId = req.params.projectId;
+  next();
+}, mediaRouter);
+app.use('/api/media', mediaRouter);
+
+// Pages: /api/projects/:projectId/pages/*
+const pagesRouter = require('./routes/pages');
+app.use('/api/projects/:projectId/pages', (req, res, next) => {
+  req.params.projectId = req.params.projectId;
+  next();
+}, pagesRouter);
+
+// Media file serving without auth (for img src)
 const db = require('./db');
 const fs = require('fs');
-app.get('/api/media/files/:id/serve', (req, res) => {
+app.get('/api/media/file/:id', (req, res) => {
   const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
   if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
-  
-  if (!fs.existsSync(file.filepath)) {
-    return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
-  }
-  
+  if (!fs.existsSync(file.filepath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
   res.setHeader('Content-Type', file.mimetype);
   res.setHeader('Content-Length', file.size);
   res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
-  
-  const fileStream = fs.createReadStream(file.filepath);
-  fileStream.pipe(res);
+  fs.createReadStream(file.filepath).pipe(res);
 });
 
-// Media routes (with auth)
-app.use('/api/media', require('./routes/media'));
-app.use('/api/social', require('./routes/social'));
+// Backward compat: /api/media/files/:id/serve
+app.get('/api/media/files/:id/serve', (req, res) => {
+  const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
+  if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
+  if (!fs.existsSync(file.filepath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
+  res.setHeader('Content-Type', file.mimetype);
+  res.setHeader('Content-Length', file.size);
+  res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
+  fs.createReadStream(file.filepath).pipe(res);
+});
 
 // Serve frontend in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

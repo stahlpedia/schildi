@@ -10,22 +10,25 @@ const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
 const router = Router();
 router.use(authenticate);
 
-// === Chat Channels ===
+// === Chat Channels (project-scoped where applicable) ===
 
 router.get('/chat-channels', (req, res) => {
-  const channels = db.prepare('SELECT * FROM chat_channels ORDER BY is_default DESC, id ASC').all();
-  res.json(channels);
+  const { project_id } = req.query;
+  if (project_id) {
+    return res.json(db.prepare('SELECT * FROM chat_channels WHERE project_id = ? ORDER BY is_default DESC, id ASC').all(project_id));
+  }
+  res.json(db.prepare('SELECT * FROM chat_channels ORDER BY is_default DESC, id ASC').all());
 });
 
 router.post('/chat-channels', (req, res) => {
-  const { name, type = 'model', model_id = '' } = req.body;
+  const { name, type = 'model', model_id = '', project_id } = req.body;
   if (!name) return res.status(400).json({ error: 'Name erforderlich' });
+  const pid = project_id || db.DEFAULT_PROJECT_ID;
   const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-  const existing = db.prepare('SELECT id FROM chat_channels WHERE slug = ?').get(slug);
+  const existing = db.prepare('SELECT id FROM chat_channels WHERE slug = ? AND project_id = ?').get(slug, pid);
   if (existing) return res.status(409).json({ error: 'Channel existiert bereits' });
-  const result = db.prepare('INSERT INTO chat_channels (name, slug, type, model_id) VALUES (?, ?, ?, ?)').run(name, slug, type, model_id);
-  const ch = db.prepare('SELECT * FROM chat_channels WHERE id = ?').get(result.lastInsertRowid);
-  res.status(201).json(ch);
+  const result = db.prepare('INSERT INTO chat_channels (project_id, name, slug, type, model_id) VALUES (?, ?, ?, ?, ?)').run(pid, name, slug, type, model_id);
+  res.status(201).json(db.prepare('SELECT * FROM chat_channels WHERE id = ?').get(result.lastInsertRowid));
 });
 
 router.put('/chat-channels/:id', (req, res) => {
@@ -34,16 +37,14 @@ router.put('/chat-channels/:id', (req, res) => {
   const { name, model_id } = req.body;
   const slug = name ? name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : ch.slug;
   db.prepare('UPDATE chat_channels SET name=?, slug=?, model_id=? WHERE id=?').run(name ?? ch.name, slug, model_id ?? ch.model_id, req.params.id);
-  const updated = db.prepare('SELECT * FROM chat_channels WHERE id = ?').get(req.params.id);
-  res.json(updated);
+  res.json(db.prepare('SELECT * FROM chat_channels WHERE id = ?').get(req.params.id));
 });
 
 router.delete('/chat-channels/:id', (req, res) => {
   const ch = db.prepare('SELECT * FROM chat_channels WHERE id = ?').get(req.params.id);
   if (!ch) return res.status(404).json({ error: 'Nicht gefunden' });
   if (ch.is_default) return res.status(400).json({ error: 'Standard-Channel kann nicht gelöscht werden' });
-  // Move conversations to default channel
-  const defaultCh = db.prepare("SELECT id FROM chat_channels WHERE is_default = 1").get();
+  const defaultCh = db.prepare("SELECT id FROM chat_channels WHERE is_default = 1 AND project_id = ?").get(ch.project_id);
   if (defaultCh) {
     db.prepare('UPDATE conversations SET channel_id = ? WHERE channel_id = ?').run(defaultCh.id, req.params.id);
   }
@@ -55,13 +56,10 @@ router.delete('/chat-channels/:id', (req, res) => {
 
 router.get('/conversations', (req, res) => {
   const { channel_id } = req.query;
-  let convos;
   if (channel_id) {
-    convos = db.prepare('SELECT * FROM conversations WHERE channel_id = ? ORDER BY created_at DESC').all(channel_id);
-  } else {
-    convos = db.prepare('SELECT * FROM conversations ORDER BY created_at DESC').all();
+    return res.json(db.prepare('SELECT * FROM conversations WHERE channel_id = ? ORDER BY created_at DESC').all(channel_id));
   }
-  res.json(convos);
+  res.json(db.prepare('SELECT * FROM conversations ORDER BY created_at DESC').all());
 });
 
 router.post('/conversations', (req, res) => {
@@ -69,8 +67,7 @@ router.post('/conversations', (req, res) => {
   const now = new Date().toISOString().replace('T', ' ').slice(0, 16);
   const fullTitle = title ? `${now} — ${title}` : now;
   const result = db.prepare('INSERT INTO conversations (title, has_unanswered, channel_id) VALUES (?, ?, ?)').run(fullTitle, 1, channel_id || null);
-  const convo = db.prepare('SELECT * FROM conversations WHERE id = ?').get(result.lastInsertRowid);
-  res.status(201).json(convo);
+  res.status(201).json(db.prepare('SELECT * FROM conversations WHERE id = ?').get(result.lastInsertRowid));
 });
 
 router.get('/conversations/:id/messages', (req, res) => {
@@ -101,25 +98,12 @@ router.post('/conversations/:id/messages', async (req, res) => {
   if (convo.ch_type === 'agent' && author === 'user' && OPENCLAW_TOKEN) {
     try {
       const history = db.prepare('SELECT author, text FROM messages WHERE conversation_id = ? ORDER BY created_at ASC').all(req.params.id);
-      const chatMessages = history.map(m => ({
-        role: m.author === 'user' ? 'user' : 'assistant',
-        content: m.text
-      }));
-
+      const chatMessages = history.map(m => ({ role: m.author === 'user' ? 'user' : 'assistant', content: m.text }));
       const response = await fetch(`${OPENCLAW_URL}/v1/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENCLAW_TOKEN}`,
-          'Content-Type': 'application/json',
-          'x-openclaw-agent-id': 'main'
-        },
-        body: JSON.stringify({
-          model: 'openclaw:main',
-          messages: chatMessages,
-          user: `schildi-dashboard-convo-${req.params.id}`
-        })
+        headers: { 'Authorization': `Bearer ${OPENCLAW_TOKEN}`, 'Content-Type': 'application/json', 'x-openclaw-agent-id': 'main' },
+        body: JSON.stringify({ model: 'openclaw:main', messages: chatMessages, user: `schildi-dashboard-convo-${req.params.id}` })
       });
-
       if (!response.ok) {
         const errText = await response.text();
         db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', `⚠️ Fehler: ${response.status} — ${errText}`);
@@ -139,20 +123,12 @@ router.post('/conversations/:id/messages', async (req, res) => {
   if (convo.ch_type === 'model' && author === 'user' && convo.ch_model_id) {
     try {
       const history = db.prepare('SELECT author, text FROM messages WHERE conversation_id = ? ORDER BY created_at ASC').all(req.params.id);
-      const chatMessages = history.map(m => ({
-        role: m.author === 'user' ? 'user' : 'assistant',
-        content: m.text
-      }));
-
+      const chatMessages = history.map(m => ({ role: m.author === 'user' ? 'user' : 'assistant', content: m.text }));
       const response = await fetch(`${OPENWEBUI_URL}/api/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENWEBUI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': `Bearer ${OPENWEBUI_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: convo.ch_model_id, messages: chatMessages })
       });
-
       if (!response.ok) {
         const errText = await response.text();
         db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', `⚠️ Fehler: ${response.status} — ${errText}`);
@@ -174,20 +150,17 @@ router.post('/conversations/:id/messages', async (req, res) => {
 // === Utility endpoints ===
 
 router.get('/unanswered', (req, res) => {
-  const convos = db.prepare('SELECT c.*, (SELECT text FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message FROM conversations c WHERE c.has_unanswered = 1 ORDER BY c.created_at DESC').all();
-  res.json(convos);
+  res.json(db.prepare('SELECT c.*, (SELECT text FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message FROM conversations c WHERE c.has_unanswered = 1 ORDER BY c.created_at DESC').all());
 });
 
 router.get('/agent-unread', (req, res) => {
-  const convos = db.prepare(`
+  res.json(db.prepare(`
     SELECT c.*, ch.type as ch_type,
       (SELECT text FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message
-    FROM conversations c
-    LEFT JOIN chat_channels ch ON c.channel_id = ch.id
+    FROM conversations c LEFT JOIN chat_channels ch ON c.channel_id = ch.id
     WHERE c.agent_unread = 1 AND (ch.type = 'agent' OR ch.type IS NULL)
     ORDER BY c.created_at DESC
-  `).all();
-  res.json(convos);
+  `).all());
 });
 
 router.post('/conversations/:id/agent-read', (req, res) => {
@@ -201,8 +174,7 @@ router.put('/messages/:id', (req, res) => {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: 'text erforderlich' });
   db.prepare("UPDATE messages SET text = ? WHERE id = ?").run(text, req.params.id);
-  const updated = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id);
-  res.json(updated);
+  res.json(db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id));
 });
 
 router.delete('/messages/:id', (req, res) => {
@@ -216,20 +188,14 @@ router.delete('/conversations/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// List available models from OpenWebUI
 router.get('/models', async (req, res) => {
   if (!OPENWEBUI_API_KEY) return res.json([]);
   try {
-    const response = await fetch(`${OPENWEBUI_URL}/api/models`, {
-      headers: { 'Authorization': `Bearer ${OPENWEBUI_API_KEY}` }
-    });
+    const response = await fetch(`${OPENWEBUI_URL}/api/models`, { headers: { 'Authorization': `Bearer ${OPENWEBUI_API_KEY}` } });
     if (!response.ok) return res.json([]);
     const data = await response.json();
-    const models = (data.data || data || []).map(m => ({ id: m.id, name: m.name || m.id }));
-    res.json(models);
-  } catch {
-    res.json([]);
-  }
+    res.json((data.data || data || []).map(m => ({ id: m.id, name: m.name || m.id })));
+  } catch { res.json([]); }
 });
 
 module.exports = router;
