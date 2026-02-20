@@ -54,22 +54,24 @@ const fs = require('fs');
 app.get('/api/media/file/:id', (req, res) => {
   const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
   if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
-  if (!fs.existsSync(file.filepath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
+  const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..'), file.filepath);
+  if (!fs.existsSync(resolvedPath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
   res.setHeader('Content-Type', file.mimetype);
   res.setHeader('Content-Length', file.size);
   res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
-  fs.createReadStream(file.filepath).pipe(res);
+  fs.createReadStream(resolvedPath).pipe(res);
 });
 
 // Backward compat: /api/media/files/:id/serve
 app.get('/api/media/files/:id/serve', (req, res) => {
   const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
   if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
-  if (!fs.existsSync(file.filepath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
+  const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..'), file.filepath);
+  if (!fs.existsSync(resolvedPath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
   res.setHeader('Content-Type', file.mimetype);
   res.setHeader('Content-Length', file.size);
   res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
-  fs.createReadStream(file.filepath).pipe(res);
+  fs.createReadStream(resolvedPath).pipe(res);
 });
 
 // Serve frontend in production

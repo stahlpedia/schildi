@@ -246,6 +246,7 @@ export default function KanbanBoard(props = {}) {
         card={editCard}
         defaultColumnName={createForColumn}
         defaultBoardId={selectedBoard}
+        projectId={projectId}
         onSave={() => { load(); if (viewMode === 'calendar') loadCalendar() }}
         onExecute={(card) => handleExecuteById(card.id)}
       />

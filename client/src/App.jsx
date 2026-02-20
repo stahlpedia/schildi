@@ -183,7 +183,7 @@ export default function App() {
         </div>
         
         {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center">
+        <div className="hidden md:flex items-center min-w-0 overflow-x-auto">
           <nav className="flex gap-0.5 flex-shrink-0">
             {TABS.map(t => (
               <button key={t} onClick={() => handleTabChange(t)}

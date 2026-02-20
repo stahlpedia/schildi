@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { kanban, columns as columnsApi, boards, attachments } from '../api'
+import { kanban, columns as columnsApi, boards, projectBoards, attachments } from '../api'
 
 export default function CardModal({
   isOpen,
@@ -11,7 +11,8 @@ export default function CardModal({
   defaultTitle = '',
   defaultDescription = '',
   onSave,
-  onExecute
+  onExecute,
+  projectId
 }) {
   const [boardsList, setBoardsList] = useState([])
   const [selectedBoard, setSelectedBoard] = useState(defaultBoardId)
@@ -29,7 +30,7 @@ export default function CardModal({
   const fileInputRef = useRef(null)
 
   const loadBoards = async () => {
-    const list = await boards.list()
+    const list = projectId ? await projectBoards(projectId) : await boards.list()
     setBoardsList(list)
     if (list.length > 0 && !selectedBoard) {
       setSelectedBoard(list[0].id)

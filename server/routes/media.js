@@ -70,7 +70,8 @@ router.delete('/folders/:id', (req, res) => {
   // Delete physical files
   const files = db.prepare('SELECT * FROM media_files WHERE folder_id = ?').all(req.params.id);
   for (const file of files) {
-    try { fs.unlinkSync(file.filepath); } catch (e) { console.warn('Could not delete:', file.filepath, e.message); }
+    const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..', '..'), file.filepath);
+    try { fs.unlinkSync(resolvedPath); } catch (e) { console.warn('Could not delete:', resolvedPath, e.message); }
   }
   db.prepare('DELETE FROM media_files WHERE folder_id = ?').run(req.params.id);
   db.prepare('DELETE FROM context_folders WHERE id = ?').run(req.params.id);
@@ -164,7 +165,8 @@ router.put('/files/:id', (req, res) => {
 router.delete('/files/:id', (req, res) => {
   const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
   if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
-  try { fs.unlinkSync(file.filepath); } catch (e) { console.warn('Could not delete:', file.filepath, e.message); }
+  const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..', '..'), file.filepath);
+  try { fs.unlinkSync(resolvedPath); } catch (e) { console.warn('Could not delete:', resolvedPath, e.message); }
   db.prepare('DELETE FROM media_files WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
