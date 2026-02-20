@@ -36,26 +36,17 @@ app.use('/api', require('./routes/kanban'));
 
 // Social: /api/projects/:projectId/social/*
 const socialRouter = require('./routes/social');
-app.use('/api/projects/:projectId/social', (req, res, next) => {
-  req.params.projectId = req.params.projectId;
-  next();
-}, socialRouter);
+app.use('/api/projects/:projectId/social', socialRouter);
 app.use('/api/social', socialRouter);
 
 // Context (Media): /api/projects/:projectId/context/*
 const mediaRouter = require('./routes/media');
-app.use('/api/projects/:projectId/context', (req, res, next) => {
-  req.params.projectId = req.params.projectId;
-  next();
-}, mediaRouter);
+app.use('/api/projects/:projectId/context', mediaRouter);
 app.use('/api/media', mediaRouter);
 
 // Pages: /api/projects/:projectId/pages/*
 const pagesRouter = require('./routes/pages');
-app.use('/api/projects/:projectId/pages', (req, res, next) => {
-  req.params.projectId = req.params.projectId;
-  next();
-}, pagesRouter);
+app.use('/api/projects/:projectId/pages', pagesRouter);
 
 // Media file serving without auth (for img src)
 const db = require('./db');

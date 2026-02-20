@@ -237,7 +237,7 @@ export default function App() {
         )}
       </header>
       
-      <main className="p-3 md:p-6">
+      <main className="p-3 md:p-6 max-w-full overflow-x-hidden">
         <div style={{ display: tab === 'Kanban' ? 'block' : 'none' }}>
           <KanbanBoard projectId={projectId} highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
         </div>

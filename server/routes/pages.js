@@ -4,7 +4,7 @@ const db = require('../db');
 const fs = require('fs');
 const path = require('path');
 
-const router = Router();
+const router = Router({ mergeParams: true });
 router.use(authenticate);
 
 const WEBSITES_DIR = process.env.WEBSITES_DIR || '/var/www/ai-websites';
@@ -128,6 +128,35 @@ router.delete('/domains/:name', async (req, res) => {
 // ============================================================
 // Page Media
 // ============================================================
+
+// GET /api/projects/:projectId/pages/domains/:domainId/media — list media for a domain
+router.get('/domains-by-id/:domainId/media', (req, res) => {
+  const domainRec = db.prepare('SELECT id FROM pages_domains WHERE id = ?').get(req.params.domainId);
+  if (!domainRec) return res.status(404).json({ error: 'Domain nicht gefunden' });
+  const media = db.prepare(`
+    SELECT pm.*, mf.filename, mf.filepath, mf.mimetype, mf.size
+    FROM page_media pm
+    JOIN media_files mf ON pm.media_file_id = mf.id
+    JOIN pages p ON pm.page_id = p.id
+    WHERE p.domain_id = ?
+    ORDER BY pm.position ASC
+  `).all(req.params.domainId);
+  res.json(media);
+});
+
+// GET /api/projects/:projectId/pages/:pageId/media
+router.get('/:pageId/media', (req, res) => {
+  const page = db.prepare('SELECT id FROM pages WHERE id = ?').get(req.params.pageId);
+  if (!page) return res.status(404).json({ error: 'Seite nicht gefunden' });
+  const media = db.prepare(`
+    SELECT pm.*, mf.filename, mf.filepath, mf.mimetype, mf.size
+    FROM page_media pm
+    JOIN media_files mf ON pm.media_file_id = mf.id
+    WHERE pm.page_id = ?
+    ORDER BY pm.position ASC
+  `).all(req.params.pageId);
+  res.json(media);
+});
 
 // POST /api/projects/:projectId/pages/:pageId/media
 router.post('/:pageId/media', (req, res) => {

@@ -5,7 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const router = Router();
+const router = Router({ mergeParams: true });
 router.use(authenticate);
 
 const mediaDir = process.env.MEDIA_DIR || path.join(__dirname, '..', 'data', 'media');

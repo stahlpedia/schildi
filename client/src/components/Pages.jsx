@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { pages, projectPages } from '../api'
+import { pages, projectPages, context } from '../api'
 import CardModal from './CardModal'
 
 // Load CodeMirror from CDN
@@ -131,6 +131,10 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showImagePanel, setShowImagePanel] = useState(false)
+  const [contextFiles, setContextFiles] = useState([])
+  const [contextFolders, setContextFolders] = useState([])
+  const [selectedContextFolder, setSelectedContextFolder] = useState(null)
   const cmRef = useRef(null)
 
   const mode = selectedFile ? getMode(selectedFile.name) : 'htmlmixed'
@@ -174,6 +178,32 @@ export default function Pages({ projectId, onNavigateToKanban }) {
     } catch (e) {
       console.error('Failed to load Pages board:', e)
     }
+  }
+
+  const loadContextFolders = async () => {
+    if (!projectId) return
+    try {
+      const list = await context.folders(projectId)
+      setContextFolders(list)
+      if (list.length > 0) {
+        setSelectedContextFolder(list[0].id)
+        loadContextFiles(list[0].id)
+      }
+    } catch (e) { console.error(e) }
+  }
+
+  const loadContextFiles = async (folderId) => {
+    if (!projectId || !folderId) return
+    try {
+      const files = await context.files(projectId, { folder_id: folderId })
+      setContextFiles(files.filter(f => f.mimetype?.startsWith('image/')))
+    } catch (e) { console.error(e) }
+  }
+
+  const handleInsertImage = (file) => {
+    const url = `/api/media/file/${file.id}`
+    const tag = `<img src="${url}" alt="${file.alt_text || file.filename}" />`
+    setEditorContent(prev => prev + '\n' + tag)
   }
 
   useEffect(() => { loadDomains(); loadPagesBoard() }, [])
@@ -362,12 +392,41 @@ export default function Pages({ projectId, onNavigateToKanban }) {
                   </button>
                   {selectedDomain && (
                     <button onClick={handlePreviewDomain}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors">👁️ Vorschau</button>
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors">Vorschau</button>
                   )}
+                  <button onClick={() => { if (!showImagePanel) loadContextFolders(); setShowImagePanel(!showImagePanel) }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${showImagePanel ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                    Bilder
+                  </button>
                 </div>
                 <button onClick={handleDeleteFile}
-                  className="px-4 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-sm transition-colors md:ml-auto">🗑️ Datei löschen</button>
+                  className="px-4 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-sm transition-colors md:ml-auto">Datei löschen</button>
               </div>
+              {/* Bilder Panel */}
+              {showImagePanel && (
+                <div className="border-t border-gray-800 p-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-sm font-semibold text-gray-300">Bilder aus Kontext</span>
+                    <select value={selectedContextFolder || ''} onChange={e => { setSelectedContextFolder(+e.target.value); loadContextFiles(+e.target.value) }}
+                      className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white focus:outline-none focus:border-emerald-500">
+                      {contextFolders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                    {contextFiles.length === 0 ? (
+                      <span className="text-xs text-gray-500">Keine Bilder in diesem Ordner</span>
+                    ) : contextFiles.map(file => (
+                      <div key={file.id} onClick={() => handleInsertImage(file)}
+                        className="w-16 h-16 rounded-lg border border-gray-700 overflow-hidden cursor-pointer hover:border-emerald-500 transition-colors group relative">
+                        <img src={`/api/media/file/${file.id}`} alt={file.filename} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-[10px] text-white">Einfügen</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">

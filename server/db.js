@@ -360,6 +360,10 @@ if (!columnExists('settings', 'updated_at')) {
   db.exec('ALTER TABLE settings ADD COLUMN updated_at TEXT');
 }
 
+// --- Add channel_id to social_folders ---
+try { db.prepare('SELECT channel_id FROM social_folders LIMIT 1').get(); }
+catch { db.exec('ALTER TABLE social_folders ADD COLUMN channel_id INTEGER'); }
+
 // --- Drop social_posts ---
 db.exec('DROP TABLE IF EXISTS social_posts');
 

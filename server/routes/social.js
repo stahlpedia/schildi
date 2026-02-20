@@ -8,7 +8,7 @@ const path = require('path');
 const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://openclaw:18789';
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
 
-const router = Router();
+const router = Router({ mergeParams: true });
 router.use(authenticate);
 
 // ============================================================
@@ -101,20 +101,23 @@ router.delete('/channels/:id', (req, res) => {
 router.get('/folders', (req, res) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: 'projectId required' });
-  const folders = db.prepare(`
-    SELECT f.*, (SELECT COUNT(*) FROM social_assets WHERE folder_id = f.id) as asset_count
-    FROM social_folders f WHERE f.project_id = ? ORDER BY f.position ASC, f.id ASC
-  `).all(projectId);
+  const { channel_id } = req.query;
+  let sql = `SELECT f.*, (SELECT COUNT(*) FROM social_assets WHERE folder_id = f.id) as asset_count
+    FROM social_folders f WHERE f.project_id = ?`;
+  const params = [projectId];
+  if (channel_id) { sql += ' AND f.channel_id = ?'; params.push(channel_id); }
+  sql += ' ORDER BY f.position ASC, f.id ASC';
+  const folders = db.prepare(sql).all(...params);
   res.json(folders);
 });
 
 router.post('/folders', (req, res) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: 'projectId required' });
-  const { name, parent_id, position = 0 } = req.body;
+  const { name, parent_id, position = 0, channel_id } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Name erforderlich' });
-  const result = db.prepare('INSERT INTO social_folders (project_id, name, parent_id, position) VALUES (?, ?, ?, ?)')
-    .run(projectId, name.trim(), parent_id || null, position);
+  const result = db.prepare('INSERT INTO social_folders (project_id, name, parent_id, position, channel_id) VALUES (?, ?, ?, ?, ?)')
+    .run(projectId, name.trim(), parent_id || null, position, channel_id || null);
   res.status(201).json(db.prepare('SELECT * FROM social_folders WHERE id = ?').get(result.lastInsertRowid));
 });
 
