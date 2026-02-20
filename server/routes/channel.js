@@ -122,7 +122,7 @@ router.post('/conversations/:id/messages', async (req, res) => {
   // If model channel + user message → call n8n webhook (or OpenWebUI fallback)
   if (convo.ch_type === 'model' && author === 'user' && convo.ch_model_id) {
     const N8N_CHAT_URL = process.env.N8N_CHAT_URL;
-    const DASHBOARD_ID = process.env.DASHBOARD_ID || 'schildi-dashboard';
+    const DASHBOARD_ID = process.env.DASHBOARD_ID || '';
     try {
       const history = db.prepare('SELECT author, text FROM messages WHERE conversation_id = ? ORDER BY created_at ASC').all(req.params.id);
       const chatMessages = history.map(m => ({ role: m.author === 'user' ? 'user' : 'assistant', content: m.text }));
@@ -196,7 +196,7 @@ router.delete('/conversations/:id', (req, res) => {
 
 router.get('/models', async (req, res) => {
   const N8N_MODELS_URL = process.env.N8N_MODELS_URL;
-  const DASHBOARD_ID = process.env.DASHBOARD_ID || 'schildi-dashboard';
+  const DASHBOARD_ID = process.env.DASHBOARD_ID || '';
 
   // n8n webhook (if configured)
   if (N8N_MODELS_URL) {
