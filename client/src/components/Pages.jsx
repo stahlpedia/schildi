@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { pages } from '../api'
+import { pages, projectPages } from '../api'
 import CardModal from './CardModal'
 
 // Load CodeMirror from CDN
@@ -115,7 +115,7 @@ function Modal({ title, onClose, children }) {
   )
 }
 
-export default function Pages({ onNavigateToKanban }) {
+export default function Pages({ projectId, onNavigateToKanban }) {
   const [domains, setDomains] = useState([])
   const [selectedDomain, setSelectedDomain] = useState('')
   const [fileTree, setFileTree] = useState([])

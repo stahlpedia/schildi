@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react'
-import { isLoggedIn, login as doLogin, logout, channel, admin } from './api'
+import { isLoggedIn, login as doLogin, logout, channel, admin, projects as projectsApi } from './api'
 import Login from './components/Login'
 import KanbanBoard from './components/KanbanBoard'
 import Admin from './components/Admin'
-import Logbuch from './components/Logbuch'
 import Channel from './components/Channel'
 import Pages from './components/Pages'
-import MediaLibrary from './components/MediaLibrary'
-import SocialMedia from './components/SocialMedia'
+import Context from './components/Context'
+import Social from './components/Social'
 
-const TABS = ['Kanban', 'Pages', 'Social', 'Channels', 'Medien', 'Admin']
+const TABS = ['Kanban', 'Social', 'Pages', 'Kontext', 'Channels', 'Admin']
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn())
@@ -19,6 +18,14 @@ export default function App() {
   const [selectedBoardId, setSelectedBoardId] = useState(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [branding, setBranding] = useState({ title: 'Schildi Dashboard', logoUrl: null })
+  
+  // Project state
+  const [projectsList, setProjectsList] = useState([])
+  const [currentProject, setCurrentProject] = useState(null)
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false)
+  const [showNewProject, setShowNewProject] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [newProjectColor, setNewProjectColor] = useState('#10b981')
 
   const checkUnanswered = async () => {
     try {
@@ -36,26 +43,43 @@ export default function App() {
     }
   }
 
+  const loadProjects = async () => {
+    try {
+      const list = await projectsApi.list()
+      setProjectsList(list)
+      if (list.length > 0) {
+        const savedId = localStorage.getItem('currentProjectId')
+        const saved = savedId ? list.find(p => p.id === +savedId) : null
+        setCurrentProject(saved || list[0])
+      }
+    } catch (error) {
+      console.error('Failed to load projects:', error)
+    }
+  }
+
   useEffect(() => {
     if (!loggedIn) return
     checkUnanswered()
     loadBranding()
+    loadProjects()
     const interval = setInterval(checkUnanswered, 15000)
-    
-    // Listen for branding updates
     const handleBrandingUpdate = () => loadBranding()
     window.addEventListener('brandingUpdated', handleBrandingUpdate)
-    
     return () => {
       clearInterval(interval)
       window.removeEventListener('brandingUpdated', handleBrandingUpdate)
     }
   }, [loggedIn])
 
-  // Also refresh when switching to Channel tab
   useEffect(() => {
     if (tab === 'Channels') checkUnanswered()
   }, [tab])
+
+  useEffect(() => {
+    if (currentProject) {
+      localStorage.setItem('currentProjectId', currentProject.id)
+    }
+  }, [currentProject])
 
   const handleNavigateToKanban = (taskId, boardId) => {
     setHighlightTaskId(taskId)
@@ -65,10 +89,35 @@ export default function App() {
 
   const handleTabChange = (newTab) => {
     setTab(newTab)
-    setMobileMenuOpen(false) // Close mobile menu when tab is selected
+    setMobileMenuOpen(false)
+  }
+
+  const handleSelectProject = (project) => {
+    setCurrentProject(project)
+    setShowProjectDropdown(false)
+  }
+
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return
+    try {
+      const project = await projectsApi.create({ name: newProjectName, color: newProjectColor })
+      setNewProjectName('')
+      setNewProjectColor('#10b981')
+      setShowNewProject(false)
+      await loadProjects()
+      if (project?.id) {
+        const list = await projectsApi.list()
+        const created = list.find(p => p.id === project.id)
+        if (created) setCurrentProject(created)
+      }
+    } catch (e) {
+      alert('Projekt erstellen fehlgeschlagen: ' + e.message)
+    }
   }
 
   if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />
+
+  const projectId = currentProject?.id
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -80,7 +129,6 @@ export default function App() {
               alt="Logo" 
               className="h-8 md:h-9 max-w-[200px] object-contain"
               onError={(e) => {
-                // Fallback to emoji if image fails to load
                 e.target.style.display = 'none'
                 const emoji = document.createElement('span')
                 emoji.className = 'text-2xl md:text-3xl'
@@ -91,7 +139,47 @@ export default function App() {
           ) : (
             <span className="text-2xl md:text-3xl">🐢</span>
           )}
-          <h1 className="text-lg md:text-xl font-bold">{branding.title}</h1>
+          <h1 className="text-lg md:text-xl font-bold hidden sm:block">{branding.title}</h1>
+          
+          {/* Project Switcher */}
+          <div className="relative ml-2">
+            <button 
+              onClick={() => setShowProjectDropdown(!showProjectDropdown)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-sm hover:border-gray-600 transition-colors"
+            >
+              {currentProject && (
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: currentProject.color || '#10b981' }} />
+              )}
+              <span className="max-w-[120px] truncate">{currentProject?.name || 'Projekt...'}</span>
+              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            {showProjectDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowProjectDropdown(false)} />
+                <div className="absolute top-full left-0 mt-1 w-64 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 py-1 max-h-80 overflow-y-auto">
+                  {projectsList.map(p => (
+                    <button key={p.id} onClick={() => handleSelectProject(p)}
+                      className={`w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-gray-700 transition-colors ${
+                        currentProject?.id === p.id ? 'bg-gray-700/50 text-emerald-300' : 'text-gray-200'
+                      }`}>
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color || '#10b981' }} />
+                      <span className="truncate">{p.name}</span>
+                    </button>
+                  ))}
+                  <div className="border-t border-gray-700 mt-1 pt-1">
+                    <button onClick={() => { setShowProjectDropdown(false); setShowNewProject(true) }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-emerald-400 hover:bg-gray-700 transition-colors">
+                      <span className="text-lg leading-none">+</span>
+                      <span>Neues Projekt</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
         
         {/* Desktop Navigation */}
@@ -151,14 +239,36 @@ export default function App() {
       
       <main className="p-3 md:p-6">
         <div style={{ display: tab === 'Kanban' ? 'block' : 'none' }}>
-          <KanbanBoard highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
+          <KanbanBoard projectId={projectId} highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
         </div>
-        <div style={{ display: tab === 'Channels' ? 'block' : 'none' }}><Channel onUpdate={checkUnanswered} /></div>
-        <div style={{ display: tab === 'Pages' ? 'block' : 'none' }}><Pages onNavigateToKanban={handleNavigateToKanban} /></div>
-        <div style={{ display: tab === 'Medien' ? 'block' : 'none' }}><MediaLibrary /></div>
-        <div style={{ display: tab === 'Social' ? 'block' : 'none' }}><SocialMedia /></div>
+        <div style={{ display: tab === 'Social' ? 'block' : 'none' }}><Social projectId={projectId} /></div>
+        <div style={{ display: tab === 'Pages' ? 'block' : 'none' }}><Pages projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
+        <div style={{ display: tab === 'Kontext' ? 'block' : 'none' }}><Context projectId={projectId} /></div>
+        <div style={{ display: tab === 'Channels' ? 'block' : 'none' }}><Channel projectId={projectId} onUpdate={checkUnanswered} /></div>
         <div style={{ display: tab === 'Admin' ? 'block' : 'none' }}><Admin onLogout={() => { logout(); setLoggedIn(false) }} /></div>
       </main>
+
+      {/* New Project Modal */}
+      {showNewProject && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3" onClick={() => setShowNewProject(false)}>
+          <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Neues Projekt</h3>
+            <input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="Projektname"
+              className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" autoFocus
+              onKeyDown={e => e.key === 'Enter' && handleCreateProject()} />
+            <div className="mb-4 flex items-center gap-3">
+              <label className="text-sm text-gray-400">Farbe:</label>
+              <input type="color" value={newProjectColor} onChange={e => setNewProjectColor(e.target.value)}
+                className="w-10 h-8 bg-gray-800 border border-gray-700 rounded cursor-pointer" />
+              <span className="w-4 h-4 rounded-full" style={{ backgroundColor: newProjectColor }} />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleCreateProject} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Erstellen</button>
+              <button onClick={() => setShowNewProject(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -35,6 +35,20 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+// Projects API
+export const projects = {
+  list: () => api('/projects'),
+  get: (id) => api('/projects/' + id),
+  create: (data) => api('/projects', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => api('/projects/' + id, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id) => api('/projects/' + id, { method: 'DELETE' }),
+};
+
+// Project-scoped helpers
+export const projectBoards = (pid) => api('/projects/' + pid + '/boards');
+export const projectCalendar = (pid, month) => api('/projects/' + pid + '/calendar?month=' + month);
+
+// Kanban (backward-compat, global endpoints)
 export const kanban = {
   list: (boardId) => api(`/kanban/cards${boardId ? `?board_id=${boardId}` : ''}`),
   create: (card) => api('/kanban/cards', { method: 'POST', body: JSON.stringify(card) }),
@@ -77,6 +91,20 @@ export const pages = {
   createFile: (domain, path, content) => api(`/pages/domains/${encodeURIComponent(domain)}/files`, { method: 'POST', body: JSON.stringify({ path, content }) }),
   updateFile: (domain, filePath, content) => api(`/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(filePath)}`, { method: 'PUT', body: JSON.stringify({ content }) }),
   deleteFile: (domain, path) => api(`/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(path)}`, { method: 'DELETE' }),
+};
+
+// Project-scoped pages
+export const projectPages = {
+  domains: (pid) => api(`/projects/${pid}/pages/domains`),
+  createDomain: (pid, name) => api(`/projects/${pid}/pages/domains`, { method: 'POST', body: JSON.stringify({ name }) }),
+  deleteDomain: (pid, name) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  files: (pid, domain) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/files`),
+  readFile: (pid, domain, path) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(path)}`),
+  createFile: (pid, domain, path, content) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/files`, { method: 'POST', body: JSON.stringify({ path, content }) }),
+  updateFile: (pid, domain, filePath, content) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(filePath)}`, { method: 'PUT', body: JSON.stringify({ content }) }),
+  deleteFile: (pid, domain, path) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  addMedia: (pid, pageId, mediaFileId) => api(`/projects/${pid}/pages/${pageId}/media`, { method: 'POST', body: JSON.stringify({ media_file_id: mediaFileId }) }),
+  removeMedia: (pid, pageId, mediaId) => api(`/projects/${pid}/pages/${pageId}/media/${mediaId}`, { method: 'DELETE' }),
 };
 
 export const chatChannels = {
@@ -135,14 +163,8 @@ export const admin = {
   restoreDb: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    
     const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE}/admin/restore/db`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: formData
-    });
-    
+    const res = await fetch(`${BASE}/admin/restore/db`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
     if (res.status === 401) { logout(); window.location.reload(); }
     if (!res.ok) throw new Error(await res.text());
     return res.json();
@@ -150,33 +172,19 @@ export const admin = {
   restoreWorkspace: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    
     const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE}/admin/restore/workspace`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: formData
-    });
-    
+    const res = await fetch(`${BASE}/admin/restore/workspace`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
     if (res.status === 401) { logout(); window.location.reload(); }
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
-  
-  // Branding API
   branding: () => api('/admin/branding'),
   updateBranding: (data) => api('/admin/branding', { method: 'PUT', body: JSON.stringify(data) }),
   uploadLogo: async (file) => {
     const formData = new FormData();
     formData.append('logo', file);
-    
     const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE}/admin/branding/logo`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: formData
-    });
-    
+    const res = await fetch(`${BASE}/admin/branding/logo`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
     if (res.status === 401) { logout(); window.location.reload(); }
     if (!res.ok) throw new Error(await res.text());
     return res.json();
@@ -184,6 +192,7 @@ export const admin = {
   deleteLogo: () => api('/admin/branding/logo', { method: 'DELETE' }),
 };
 
+// Media (deprecated - use context instead)
 export const media = {
   folders: () => api('/media/folders'),
   createFolder: (data) => api('/media/folders', { method: 'POST', body: JSON.stringify(data) }),
@@ -192,9 +201,7 @@ export const media = {
   files: (params) => {
     const queryString = new URLSearchParams();
     Object.keys(params || {}).forEach(key => {
-      if (params[key] !== undefined && params[key] !== '') {
-        queryString.append(key, params[key]);
-      }
+      if (params[key] !== undefined && params[key] !== '') queryString.append(key, params[key]);
     });
     return api(`/media/files${queryString.toString() ? '?' + queryString.toString() : ''}`);
   },
@@ -203,14 +210,8 @@ export const media = {
     formData.append('file', file);
     formData.append('folderId', folderId);
     formData.append('tags', JSON.stringify(tags));
-    
     const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE}/media/files/upload`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: formData
-    });
-    
+    const res = await fetch(`${BASE}/media/files/upload`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
     if (res.status === 401) { logout(); window.location.reload(); }
     if (!res.ok) throw new Error(await res.text());
     return res.json();
@@ -218,4 +219,54 @@ export const media = {
   updateFile: (id, data) => api(`/media/files/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteFile: (id) => api(`/media/files/${id}`, { method: 'DELETE' }),
   serve: (id) => `${BASE}/media/files/${id}/serve`,
+};
+
+// Context API (project-scoped media, replaces media for project contexts)
+export const context = {
+  folders: (pid) => api(`/projects/${pid}/context/folders`),
+  createFolder: (pid, data) => api(`/projects/${pid}/context/folders`, { method: 'POST', body: JSON.stringify(data) }),
+  updateFolder: (pid, id, data) => api(`/projects/${pid}/context/folders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteFolder: (pid, id, confirm = false) => api(`/projects/${pid}/context/folders/${id}?confirm=${confirm}`, { method: 'DELETE' }),
+  files: (pid, params) => {
+    const queryString = new URLSearchParams();
+    Object.keys(params || {}).forEach(key => {
+      if (params[key] !== undefined && params[key] !== '') queryString.append(key, params[key]);
+    });
+    return api(`/projects/${pid}/context/files${queryString.toString() ? '?' + queryString.toString() : ''}`);
+  },
+  upload: async (pid, file, folderId, tags = []) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folderId', folderId);
+    formData.append('tags', JSON.stringify(tags));
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${BASE}/projects/${pid}/context/upload`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+    if (res.status === 401) { logout(); window.location.reload(); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  updateFile: (pid, id, data) => api(`/projects/${pid}/context/files/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteFile: (pid, id) => api(`/projects/${pid}/context/files/${id}`, { method: 'DELETE' }),
+  serve: (id) => `${BASE}/media/file/${id}`,
+};
+
+// Social API (project-scoped)
+export const social = {
+  channels: (pid) => api(`/projects/${pid}/social/channels`),
+  createChannel: (pid, data) => api(`/projects/${pid}/social/channels`, { method: 'POST', body: JSON.stringify(data) }),
+  updateChannel: (pid, id, data) => api(`/projects/${pid}/social/channels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteChannel: (pid, id) => api(`/projects/${pid}/social/channels/${id}`, { method: 'DELETE' }),
+  folders: (pid) => api(`/projects/${pid}/social/folders`),
+  createFolder: (pid, data) => api(`/projects/${pid}/social/folders`, { method: 'POST', body: JSON.stringify(data) }),
+  updateFolder: (pid, id, data) => api(`/projects/${pid}/social/folders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteFolder: (pid, id) => api(`/projects/${pid}/social/folders/${id}`, { method: 'DELETE' }),
+  assets: (pid, folderId) => api(`/projects/${pid}/social/assets${folderId ? '?folder_id=' + folderId : ''}`),
+  createAsset: (pid, data) => api(`/projects/${pid}/social/assets`, { method: 'POST', body: JSON.stringify(data) }),
+  getAsset: (pid, id) => api(`/projects/${pid}/social/assets/${id}`),
+  updateAsset: (pid, id, data) => api(`/projects/${pid}/social/assets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAsset: (pid, id) => api(`/projects/${pid}/social/assets/${id}`, { method: 'DELETE' }),
+  addAssetMedia: (pid, assetId, mediaFileId) => api(`/projects/${pid}/social/assets/${assetId}/media`, { method: 'POST', body: JSON.stringify({ media_file_id: mediaFileId }) }),
+  removeAssetMedia: (pid, assetId, mediaId) => api(`/projects/${pid}/social/assets/${assetId}/media/${mediaId}`, { method: 'DELETE' }),
+  profile: (pid) => api(`/projects/${pid}/social/profile`),
+  updateProfile: (pid, data) => api(`/projects/${pid}/social/profile`, { method: 'PUT', body: JSON.stringify(data) }),
 };

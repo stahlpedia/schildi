@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { channel, chatChannels, attachments } from '../api'
 import CardModal from './CardModal'
 
-export default function Channel({ onUpdate }) {
+export default function Channel({ projectId, onUpdate }) {
   const [channels, setChannels] = useState([])
   const [selectedChannel, setSelectedChannel] = useState(null)
   const [convos, setConvos] = useState([])
