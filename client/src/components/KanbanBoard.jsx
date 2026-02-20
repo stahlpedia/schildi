@@ -352,7 +352,7 @@ export default function KanbanBoard(props = {}) {
       {viewMode === 'board' ? (
         <>
           {/* Desktop Board */}
-          <div className="hidden md:grid gap-6" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>
+          <div className="hidden md:grid gap-6 overflow-x-auto" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(280px, 1fr))` }}>
             {cols.map(col => (
               <div key={col.id} className={`bg-gray-900 rounded-xl border-t-4 ${col.color} p-4 min-h-[400px]`}
                 onDragOver={onDragOver} onDrop={e => onDrop(e, col.name)}>
