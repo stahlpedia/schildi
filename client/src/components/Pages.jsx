@@ -277,7 +277,14 @@ export default function Pages({ projectId, onNavigateToKanban }) {
 
   const handlePreviewDomain = () => {
     if (selectedDomain) {
-      window.open(`https://${selectedDomain}`, '_blank')
+      let url = `https://${selectedDomain}`
+      if (selectedFile) {
+        let p = selectedFile.path.replace(/\\/g, '/')
+        if (p.endsWith('/index.html')) p = p.slice(0, -10)
+        else if (p === 'index.html') p = ''
+        if (p) url += `/${p}`
+      }
+      window.open(url, '_blank')
     }
   }
 
