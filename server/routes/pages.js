@@ -68,20 +68,17 @@ async function registerCaddyRoute(domain) {
   const authRules = db.prepare('SELECT path, username, password_hash FROM page_passwords WHERE domain = ?').all(domain);
   const route = buildCaddyRoute(domain, authRules);
   try {
-    // Try update first
-    const res = await fetch(`${CADDY_API}/id/site_${domain}`, {
-      method: 'PUT',
+    // Delete all existing routes with this @id first (Caddy can have duplicates)
+    for (let i = 0; i < 20; i++) {
+      const res = await fetch(`${CADDY_API}/id/site_${domain}`, { method: 'DELETE' });
+      if (!res.ok) break;
+    }
+    // Create fresh
+    await fetch(`${CADDY_API}/config/apps/http/servers/srv0/routes`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(route)
     });
-    if (!res.ok) {
-      // Route doesn't exist yet, create it
-      await fetch(`${CADDY_API}/config/apps/http/servers/srv0/routes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(route)
-      });
-    }
   } catch (e) { console.error(`[Caddy] Failed to register ${domain}:`, e.message); }
 }
 
