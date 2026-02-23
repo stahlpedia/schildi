@@ -26,6 +26,10 @@ export default function App() {
   const [showNewProject, setShowNewProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectColor, setNewProjectColor] = useState('#10b981')
+  const [editingProject, setEditingProject] = useState(null)
+  const [editProjectName, setEditProjectName] = useState('')
+  const [editProjectColor, setEditProjectColor] = useState('#10b981')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const checkUnanswered = async () => {
     try {
@@ -115,6 +119,45 @@ export default function App() {
     }
   }
 
+  const handleEditProject = (project, e) => {
+    e.stopPropagation()
+    setEditingProject(project)
+    setEditProjectName(project.name)
+    setEditProjectColor(project.color || '#10b981')
+    setShowDeleteConfirm(false)
+    setShowProjectDropdown(false)
+  }
+
+  const handleUpdateProject = async () => {
+    if (!editProjectName.trim() || !editingProject) return
+    try {
+      await projectsApi.update(editingProject.id, { name: editProjectName, color: editProjectColor })
+      await loadProjects()
+      if (currentProject?.id === editingProject.id) {
+        setCurrentProject(prev => ({ ...prev, name: editProjectName, color: editProjectColor }))
+      }
+      setEditingProject(null)
+    } catch (e) {
+      alert('Fehler: ' + e.message)
+    }
+  }
+
+  const handleDeleteProject = async () => {
+    if (!editingProject) return
+    try {
+      await projectsApi.remove(editingProject.id)
+      setEditingProject(null)
+      setShowDeleteConfirm(false)
+      const list = await projectsApi.list()
+      setProjectsList(list)
+      if (currentProject?.id === editingProject.id) {
+        setCurrentProject(list[0] || null)
+      }
+    } catch (e) {
+      alert('Fehler: ' + e.message)
+    }
+  }
+
   if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />
 
   const projectId = currentProject?.id
@@ -159,13 +202,21 @@ export default function App() {
                 <div className="fixed inset-0 z-40" onClick={() => setShowProjectDropdown(false)} />
                 <div className="absolute top-full left-0 mt-1 w-64 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 py-1 max-h-80 overflow-y-auto">
                   {projectsList.map(p => (
-                    <button key={p.id} onClick={() => handleSelectProject(p)}
-                      className={`w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-gray-700 transition-colors ${
+                    <div key={p.id} className={`flex items-center hover:bg-gray-700 transition-colors ${
                         currentProject?.id === p.id ? 'bg-gray-700/50 text-emerald-300' : 'text-gray-200'
                       }`}>
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color || '#10b981' }} />
-                      <span className="truncate">{p.name}</span>
-                    </button>
+                      <button onClick={() => handleSelectProject(p)}
+                        className="flex-1 flex items-center gap-2 px-4 py-2.5 text-left text-sm min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color || '#10b981' }} />
+                        <span className="truncate">{p.name}</span>
+                      </button>
+                      <button onClick={(e) => handleEditProject(p, e)}
+                        className="p-2 mr-1 text-gray-500 hover:text-gray-300 transition-colors shrink-0" title="Bearbeiten">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                    </div>
                   ))}
                   <div className="border-t border-gray-700 mt-1 pt-1">
                     <button onClick={() => { setShowProjectDropdown(false); setShowNewProject(true) }}
@@ -264,6 +315,46 @@ export default function App() {
             <div className="flex gap-2">
               <button onClick={handleCreateProject} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Erstellen</button>
               <button onClick={() => setShowNewProject(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Project Modal */}
+      {editingProject && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3" onClick={() => setEditingProject(null)}>
+          <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Projekt bearbeiten</h3>
+            <input value={editProjectName} onChange={e => setEditProjectName(e.target.value)} placeholder="Projektname"
+              className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" autoFocus
+              onKeyDown={e => e.key === 'Enter' && handleUpdateProject()} />
+            <div className="mb-4 flex items-center gap-3">
+              <label className="text-sm text-gray-400">Farbe:</label>
+              <input type="color" value={editProjectColor} onChange={e => setEditProjectColor(e.target.value)}
+                className="w-10 h-10 bg-transparent border-0 rounded cursor-pointer p-0"
+                style={{ WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' }} />
+              <span className="w-4 h-4 rounded-full" style={{ backgroundColor: editProjectColor }} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex gap-2">
+                <button onClick={handleUpdateProject} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Speichern</button>
+                <button onClick={() => setEditingProject(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Abbrechen</button>
+              </div>
+              {projectsList.length > 1 && !showDeleteConfirm && (
+                <button onClick={() => setShowDeleteConfirm(true)}
+                  className="px-3 py-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg text-sm transition-colors">
+                  Löschen
+                </button>
+              )}
+              {showDeleteConfirm && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-red-400">Alles löschen?</span>
+                  <button onClick={handleDeleteProject}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-xs font-medium text-white transition-colors">Ja</button>
+                  <button onClick={() => setShowDeleteConfirm(false)}
+                    className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs transition-colors">Nein</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
