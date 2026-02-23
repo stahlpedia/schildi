@@ -106,6 +106,10 @@ export const projectPages = {
   getMedia: (pid, pageId) => api(`/projects/${pid}/pages/${pageId}/media`),
   addMedia: (pid, pageId, mediaFileId) => api(`/projects/${pid}/pages/${pageId}/media`, { method: 'POST', body: JSON.stringify({ media_file_id: mediaFileId }) }),
   removeMedia: (pid, pageId, mediaId) => api(`/projects/${pid}/pages/${pageId}/media/${mediaId}`, { method: 'DELETE' }),
+  // Password protection
+  getPasswords: (pid, domain) => api(`/projects/${pid}/pages/passwords/${encodeURIComponent(domain)}`),
+  setPassword: (pid, domain, path, username, password) => api(`/projects/${pid}/pages/passwords/${encodeURIComponent(domain)}`, { method: 'POST', body: JSON.stringify({ path, username, password }) }),
+  removePassword: (pid, domain, path) => api(`/projects/${pid}/pages/passwords/${encodeURIComponent(domain)}/${encodeURIComponent(path)}`, { method: 'DELETE' }),
 };
 
 export const chatChannels = {

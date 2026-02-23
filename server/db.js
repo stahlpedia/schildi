@@ -231,6 +231,16 @@ db.exec(`
     category TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS page_passwords (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    domain TEXT NOT NULL,
+    path TEXT NOT NULL DEFAULT '/',
+    username TEXT NOT NULL DEFAULT 'user',
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(domain, path)
+  );
 `);
 
 // ============================================================

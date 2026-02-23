@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { pages, projectPages, context } from '../api'
+import { pages, projectPages, context, projectPages as pp } from '../api'
 import CardModal from './CardModal'
 
 // Load CodeMirror from CDN
@@ -78,28 +78,46 @@ function getIcon(entry) {
   return '📄'
 }
 
-function FileTree({ tree, selected, onSelect, depth = 0 }) {
+function FileTree({ tree, selected, onSelect, protectedPaths = [], onLockClick, depth = 0 }) {
   const [expanded, setExpanded] = useState({})
   const toggle = (p) => setExpanded(prev => ({ ...prev, [p]: !prev[p] }))
 
+  const isProtected = (entryPath) => {
+    const normalized = '/' + entryPath
+    return protectedPaths.some(p => p === normalized || p === normalized + '/' || normalized.startsWith(p.replace(/\*$/, '')))
+  }
+
   return (
     <div>
-      {tree.map(entry => (
-        <div key={entry.path}>
-          <div
-            onClick={() => entry.type === 'directory' ? toggle(entry.path) : onSelect(entry)}
-            className={`flex items-center gap-1.5 px-2 py-1 cursor-pointer text-xs hover:bg-gray-800/50 transition-colors ${selected === entry.path ? 'bg-gray-800 text-white' : 'text-gray-300'}`}
-            style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          >
-            {entry.type === 'directory' && <span className="text-[10px] text-gray-500">{expanded[entry.path] ? '▼' : '▶'}</span>}
-            <span>{getIcon(entry)}</span>
-            <span className="truncate">{entry.name}</span>
+      {tree.map(entry => {
+        const locked = isProtected(entry.path)
+        return (
+          <div key={entry.path}>
+            <div
+              onClick={() => entry.type === 'directory' ? toggle(entry.path) : onSelect(entry)}
+              className={`flex items-center gap-1.5 px-2 py-1 cursor-pointer text-xs hover:bg-gray-800/50 transition-colors group ${selected === entry.path ? 'bg-gray-800 text-white' : 'text-gray-300'}`}
+              style={{ paddingLeft: `${depth * 16 + 8}px` }}
+            >
+              {entry.type === 'directory' && <span className="text-[10px] text-gray-500">{expanded[entry.path] ? '▼' : '▶'}</span>}
+              <span>{getIcon(entry)}</span>
+              <span className="truncate flex-1">{entry.name}</span>
+              {locked && <span className="text-yellow-500 text-[10px]" title="Passwortgeschützt">🔒</span>}
+              {onLockClick && (
+                <button
+                  onClick={e => { e.stopPropagation(); onLockClick(entry) }}
+                  className={`opacity-0 group-hover:opacity-100 text-[10px] transition-opacity ${locked ? 'text-yellow-500' : 'text-gray-500 hover:text-yellow-400'}`}
+                  title={locked ? 'Schutz bearbeiten' : 'Passwortschutz setzen'}
+                >
+                  {locked ? '🔒' : '🔓'}
+                </button>
+              )}
+            </div>
+            {entry.type === 'directory' && expanded[entry.path] && entry.children && (
+              <FileTree tree={entry.children} selected={selected} onSelect={onSelect} protectedPaths={protectedPaths} onLockClick={onLockClick} depth={depth + 1} />
+            )}
           </div>
-          {entry.type === 'directory' && expanded[entry.path] && entry.children && (
-            <FileTree tree={entry.children} selected={selected} onSelect={onSelect} depth={depth + 1} />
-          )}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -130,6 +148,10 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   const [pagesBoardId, setPagesBoardId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [protectedPaths, setProtectedPaths] = useState([])
+  const [showPasswordModal, setShowPasswordModal] = useState(null) // entry or null
+  const [pwUsername, setPwUsername] = useState('user')
+  const [pwPassword, setPwPassword] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showImagePanel, setShowImagePanel] = useState(false)
   const [contextFiles, setContextFiles] = useState([])
@@ -218,8 +240,41 @@ export default function Pages({ projectId, onNavigateToKanban }) {
     setEditorContent(prev => prev + '\n' + tag)
   }
 
+  const loadPasswords = async (domain) => {
+    if (!domain || !projectId) { setProtectedPaths([]); return }
+    try {
+      const list = await projectPages.getPasswords(projectId, domain)
+      setProtectedPaths(list.map(p => p.path))
+    } catch (e) { setProtectedPaths([]) }
+  }
+
+  const handleSetPassword = async () => {
+    if (!selectedDomain || !showPasswordModal || !pwPassword) return
+    const entry = showPasswordModal
+    const protPath = entry.type === 'directory' ? '/' + entry.path + '/' : '/' + entry.path
+    try {
+      await projectPages.setPassword(projectId, selectedDomain, protPath, pwUsername, pwPassword)
+      setShowPasswordModal(null)
+      setPwPassword('')
+      setPwUsername('user')
+      loadPasswords(selectedDomain)
+    } catch (e) { setError(e.message) }
+  }
+
+  const handleRemovePassword = async () => {
+    if (!selectedDomain || !showPasswordModal) return
+    const entry = showPasswordModal
+    const protPath = entry.type === 'directory' ? '/' + entry.path + '/' : '/' + entry.path
+    try {
+      await projectPages.removePassword(projectId, selectedDomain, protPath)
+      setShowPasswordModal(null)
+      setPwPassword('')
+      loadPasswords(selectedDomain)
+    } catch (e) { setError(e.message) }
+  }
+
   useEffect(() => { setSelectedDomain(null); setSelectedFile(null); setFileTree([]); loadDomains(); loadPagesBoard() }, [projectId])
-  useEffect(() => { if (selectedDomain) { loadFiles(selectedDomain); setSelectedFile(null) } }, [selectedDomain])
+  useEffect(() => { if (selectedDomain) { loadFiles(selectedDomain); loadPasswords(selectedDomain); setSelectedFile(null) } }, [selectedDomain])
 
   const handleCreateDomain = async () => {
     if (!newDomainName.trim()) return
@@ -352,7 +407,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
           </div>
           <div className="flex-1 overflow-y-auto">
             {fileTree.length > 0 ? (
-              <FileTree tree={fileTree} selected={selectedFile?.path} onSelect={loadFile} />
+              <FileTree tree={fileTree} selected={selectedFile?.path} onSelect={loadFile} protectedPaths={protectedPaths} onLockClick={projectId ? (entry) => { setShowPasswordModal(entry); setPwPassword(''); setPwUsername('user') } : null} />
             ) : (
               <p className="text-gray-500 text-center py-6 text-xs">
                 {selectedDomain ? 'Keine Dateien' : 'Domain wählen'}
@@ -380,7 +435,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
               </div>
               <div className="flex-1 overflow-y-auto">
                 {fileTree.length > 0 ? (
-                  <FileTree tree={fileTree} selected={selectedFile?.path} onSelect={(file) => { loadFile(file); setSidebarOpen(false); }} />
+                  <FileTree tree={fileTree} selected={selectedFile?.path} onSelect={(file) => { loadFile(file); setSidebarOpen(false); }} protectedPaths={protectedPaths} onLockClick={projectId ? (entry) => { setShowPasswordModal(entry); setPwPassword(''); setPwUsername('user'); setSidebarOpen(false) } : null} />
                 ) : (
                   <p className="text-gray-500 text-center py-6 text-xs">
                     {selectedDomain ? 'Keine Dateien' : 'Domain wählen'}
@@ -484,6 +539,54 @@ export default function Pages({ projectId, onNavigateToKanban }) {
             <button onClick={() => setShowNewFile(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Abbrechen</button>
             <button onClick={handleCreateFile} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium">Erstellen</button>
           </div>
+        </Modal>
+      )}
+
+      {/* Password Protection Modal */}
+      {showPasswordModal && (
+        <Modal title={`Passwortschutz: ${showPasswordModal.name}`} onClose={() => setShowPasswordModal(null)}>
+          <p className="text-xs text-gray-400">
+            Pfad: /{showPasswordModal.path}{showPasswordModal.type === 'directory' ? '/' : ''}
+          </p>
+          {protectedPaths.includes('/' + showPasswordModal.path) || protectedPaths.includes('/' + showPasswordModal.path + '/') ? (
+            <div className="space-y-3">
+              <p className="text-sm text-yellow-400">Dieser Pfad ist bereits geschützt.</p>
+              <p className="text-xs text-gray-400">Du kannst den Schutz entfernen oder ein neues Passwort setzen.</p>
+              <div>
+                <label className="text-xs text-gray-400">Neuer Benutzername</label>
+                <input value={pwUsername} onChange={e => setPwUsername(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400">Neues Passwort</label>
+                <input type="password" value={pwPassword} onChange={e => setPwPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSetPassword()}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={handleRemovePassword} className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium">Schutz entfernen</button>
+                <button onClick={handleSetPassword} disabled={!pwPassword} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm font-medium">Passwort ändern</button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400">Benutzername</label>
+                <input value={pwUsername} onChange={e => setPwUsername(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400">Passwort</label>
+                <input type="password" value={pwPassword} onChange={e => setPwPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSetPassword()}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setShowPasswordModal(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Abbrechen</button>
+                <button onClick={handleSetPassword} disabled={!pwPassword} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm font-medium">Schutz setzen</button>
+              </div>
+            </div>
+          )}
         </Modal>
       )}
 

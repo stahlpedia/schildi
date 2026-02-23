@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { authenticate } = require('../auth');
 const db = require('../db');
+const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 
@@ -28,18 +29,70 @@ function getMimeType(ext) {
 }
 
 // --- Caddy helpers ---
-async function registerCaddyRoute(domain) {
-  try {
-    await fetch(`${CADDY_API}/config/apps/http/servers/srv0/routes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ "@id": `site_${domain}`, "match": [{ "host": [domain] }], "handle": [{ "handler": "vars", "root": `/srv/websites/${domain}` }, { "handler": "file_server" }] })
+function buildCaddyRoute(domain, authRules = []) {
+  const subroutes = [];
+
+  // Auth rules first (before file_server)
+  for (const rule of authRules) {
+    const matchPath = rule.path === '/' ? ['/*'] : [rule.path.endsWith('/') ? `${rule.path}*` : rule.path];
+    subroutes.push({
+      match: [{ path: matchPath }],
+      handle: [{
+        handler: 'authentication',
+        providers: {
+          http_basic: {
+            accounts: [{ username: rule.username, password: rule.password_hash }]
+          }
+        }
+      }]
     });
+  }
+
+  // File server (always last)
+  subroutes.push({
+    handle: [
+      { handler: 'vars', root: `/srv/websites/${domain}` },
+      { handler: 'file_server', hide: ['/etc/caddy/Caddyfile'] }
+    ]
+  });
+
+  return {
+    '@id': `site_${domain}`,
+    match: [{ host: [domain] }],
+    handle: [{ handler: 'subroute', routes: subroutes }],
+    terminal: true
+  };
+}
+
+async function registerCaddyRoute(domain) {
+  const authRules = db.prepare('SELECT path, username, password_hash FROM page_passwords WHERE domain = ?').all(domain);
+  const route = buildCaddyRoute(domain, authRules);
+  try {
+    // Try update first
+    const res = await fetch(`${CADDY_API}/id/site_${domain}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(route)
+    });
+    if (!res.ok) {
+      // Route doesn't exist yet, create it
+      await fetch(`${CADDY_API}/config/apps/http/servers/srv0/routes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(route)
+      });
+    }
   } catch (e) { console.error(`[Caddy] Failed to register ${domain}:`, e.message); }
 }
+
+async function syncCaddyAuth(domain) {
+  return registerCaddyRoute(domain);
+}
+
 async function removeCaddyRoute(domain) {
   try { await fetch(`${CADDY_API}/id/site_${domain}`, { method: 'DELETE' }); } catch (e) { console.error(`[Caddy] Failed to remove ${domain}:`, e.message); }
 }
+
 async function registerAllCaddyRoutes() {
   try {
     const entries = fs.readdirSync(WEBSITES_DIR, { withFileTypes: true });
@@ -239,6 +292,55 @@ router.delete('/domains/:name/files/*', (req, res) => {
   if (!fs.existsSync(full)) return res.status(404).json({ error: 'Datei nicht gefunden' });
   try { fs.rmSync(full, { recursive: true, force: true }); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ============================================================
+// Password Protection
+// ============================================================
+
+// GET passwords for a domain
+router.get('/passwords/:domain', (req, res) => {
+  const { domain } = req.params;
+  if (!isValidDomain(domain)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
+  const passwords = db.prepare('SELECT id, domain, path, username, created_at FROM page_passwords WHERE domain = ? ORDER BY path ASC').all(domain);
+  res.json(passwords);
+});
+
+// POST set password for a path
+router.post('/passwords/:domain', async (req, res) => {
+  const { domain } = req.params;
+  let { path: protectedPath, username, password } = req.body;
+  if (!isValidDomain(domain)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
+  if (!password) return res.status(400).json({ error: 'Passwort erforderlich' });
+
+  protectedPath = protectedPath || '/';
+  username = username || 'user';
+
+  // Normalize: ensure path starts with /
+  if (!protectedPath.startsWith('/')) protectedPath = '/' + protectedPath;
+
+  const hash = bcrypt.hashSync(password, 10);
+
+  try {
+    db.prepare('INSERT OR REPLACE INTO page_passwords (domain, path, username, password_hash) VALUES (?, ?, ?, ?)')
+      .run(domain, protectedPath, username, hash);
+    await syncCaddyAuth(domain);
+    res.status(201).json({ domain, path: protectedPath, username });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE remove password for a path
+router.delete('/passwords/:domain/*', async (req, res) => {
+  const { domain } = req.params;
+  let protectedPath = '/' + (req.params[0] || '');
+  if (!isValidDomain(domain)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
+
+  try {
+    const result = db.prepare('DELETE FROM page_passwords WHERE domain = ? AND path = ?').run(domain, protectedPath);
+    if (result.changes === 0) return res.status(404).json({ error: 'Kein Schutz für diesen Pfad gefunden' });
+    await syncCaddyAuth(domain);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;
