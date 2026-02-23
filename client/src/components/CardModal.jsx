@@ -93,7 +93,6 @@ export default function CardModal({
       setExecuteDirectly(false)
       setCardAttachments([])
       setPendingAttachments([])
-    } else {
       setSelectedBoard(defaultBoardId)
       setColumnName(defaultColumnName)
     }
