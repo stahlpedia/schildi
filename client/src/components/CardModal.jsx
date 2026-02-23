@@ -69,6 +69,8 @@ export default function CardModal({
       setOnHold(card.on_hold === 1)
       setExecuteDirectly(false)
       setPendingAttachments([])
+      if (card.board_id) setSelectedBoard(card.board_id)
+      if (card.column_name) setColumnName(card.column_name)
       
       // Load attachments for edit mode
       const loadAttachments = async () => {
@@ -193,7 +195,7 @@ export default function CardModal({
         cardData = { ...card, title, description: desc }
       }
 
-      const shouldExecute = executeDirectly && mode === 'edit'
+      const shouldExecute = executeDirectly
       
       // Reset form
       setTitle('')
@@ -215,6 +217,34 @@ export default function CardModal({
       
     } catch (e) {
       alert('Speichern fehlgeschlagen: ' + e.message)
+    }
+  }
+
+  const handleCreateAndExecute = async () => {
+    if (!title.trim() || !selectedBoard || !columnName) return
+    try {
+      const response = await kanban.create({
+        title,
+        description: desc,
+        column_name: columnName,
+        labels: labels ? labels.split(',').map(l => l.trim()) : [],
+        board_id: selectedBoard,
+        due_date: dueDate || null,
+        on_hold: 0
+      })
+      if (response?.id && pendingAttachments.length > 0) {
+        for (const file of pendingAttachments) {
+          await attachments.upload(file, 'card', response.id)
+        }
+      }
+      setTitle(''); setDesc(''); setLabels(''); setDueDate('')
+      setOnHold(false); setExecuteDirectly(false)
+      setPendingAttachments([]); setCardAttachments([])
+      onClose()
+      if (onSave) onSave(response)
+      if (onExecute && response) setTimeout(() => onExecute(response), 500)
+    } catch (e) {
+      alert('Erstellen fehlgeschlagen: ' + e.message)
     }
   }
 
@@ -271,11 +301,6 @@ export default function CardModal({
               <input type="checkbox" checked={onHold} onChange={e => setOnHold(e.target.checked)}
                 className="rounded bg-gray-800 border-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-900" />
               <label className="text-sm text-gray-300">On Hold</label>
-            </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={executeDirectly} onChange={e => setExecuteDirectly(e.target.checked)}
-                className="rounded bg-gray-800 border-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900" />
-              <label className="text-sm text-blue-300">🐢 Direkt ausführen</label>
             </div>
           </div>
         </div>
@@ -363,13 +388,11 @@ export default function CardModal({
           >
             {mode === 'edit' ? 'Speichern' : 'Erstellen'}
           </button>
-          {mode === 'edit' && (
-            <button onClick={handleExecute}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors"
-              title="Task wird von Schildi bearbeitet. Dialog schließt automatisch.">
-              🐢 Jetzt ausführen
-            </button>
-          )}
+          <button onClick={mode === 'edit' ? handleExecute : handleCreateAndExecute}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors"
+            title="Task wird von Schildi bearbeitet.">
+            🐢 Jetzt ausführen
+          </button>
           <button onClick={onClose} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Schließen</button>
         </div>
       </div>
