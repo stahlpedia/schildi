@@ -93,10 +93,10 @@ export default function CardModal({
       setExecuteDirectly(false)
       setCardAttachments([])
       setPendingAttachments([])
+    } else {
+      setSelectedBoard(defaultBoardId)
+      setColumnName(defaultColumnName)
     }
-
-    setSelectedBoard(defaultBoardId)
-    setColumnName(defaultColumnName)
   }, [isOpen, mode, card, defaultTitle, defaultDescription, defaultBoardId, defaultColumnName])
 
   const handleFileUpload = async (event) => {
