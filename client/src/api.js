@@ -109,7 +109,7 @@ export const projectPages = {
   // Password protection
   getPasswords: (pid, domain) => api(`/projects/${pid}/pages/passwords/${encodeURIComponent(domain)}`),
   setPassword: (pid, domain, path, username, password) => api(`/projects/${pid}/pages/passwords/${encodeURIComponent(domain)}`, { method: 'POST', body: JSON.stringify({ path, username, password }) }),
-  removePassword: (pid, domain, path) => api(`/projects/${pid}/pages/passwords/${encodeURIComponent(domain)}/${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  removePassword: (pid, domain, path) => api(`/projects/${pid}/pages/passwords/${encodeURIComponent(domain)}${path.startsWith('/') ? path : '/' + path}`, { method: 'DELETE' }),
 };
 
 export const chatChannels = {
