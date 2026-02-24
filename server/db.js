@@ -232,6 +232,23 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT DEFAULT 'social',
+    html TEXT NOT NULL DEFAULT '',
+    css TEXT NOT NULL DEFAULT '',
+    fields TEXT DEFAULT '[]',
+    width INTEGER DEFAULT 1080,
+    height INTEGER DEFAULT 1080,
+    is_default INTEGER DEFAULT 0,
+    preview_data TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+  );
+
   CREATE TABLE IF NOT EXISTS page_passwords (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     domain TEXT NOT NULL,
@@ -482,6 +499,111 @@ const ctxFolderCount = db.prepare('SELECT COUNT(*) as c FROM context_folders').g
 if (ctxFolderCount.c === 0) {
   db.prepare("INSERT INTO context_folders (project_id, name, type, is_system) VALUES (?, ?, ?, ?)").run(DEFAULT_PROJECT_ID, 'Generiert', 'system', 1);
   db.prepare("INSERT INTO context_folders (project_id, name, type, is_system) VALUES (?, ?, ?, ?)").run(DEFAULT_PROJECT_ID, 'Persönlicher Stock', 'system', 1);
+}
+
+// Seed default templates if empty
+const templateCount = db.prepare('SELECT COUNT(*) as c FROM templates').get();
+if (templateCount.c === 0) {
+  const insertTpl = db.prepare(`INSERT INTO templates (project_id, name, category, html, css, fields, width, height, is_default, preview_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+
+  insertTpl.run(DEFAULT_PROJECT_ID, 'Zitat-Karte', 'social',
+    `<div class="card">
+  <div class="quote">"{{quote}}"</div>
+  <div class="author">{{author}}</div>
+  <div class="watermark">🐢 schildi.ai</div>
+</div>`,
+    `.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, {{brandColor|#6366f1}} 0%, #1a1a2e 100%);
+  padding: 80px;
+  box-sizing: border-box;
+  font-family: 'Noto Sans', sans-serif;
+  color: #ffffff;
+  position: relative;
+}
+.quote {
+  font-size: 48px;
+  text-align: center;
+  line-height: 1.3;
+  margin-bottom: 40px;
+}
+.author {
+  font-size: 32px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.56);
+  text-align: center;
+}
+.watermark {
+  position: absolute;
+  bottom: 40px;
+  right: 40px;
+  font-size: 24px;
+  color: rgba(255,255,255,0.37);
+  font-weight: 600;
+}`,
+    JSON.stringify([
+      {name: "quote", type: "text", label: "Zitat"},
+      {name: "author", type: "text", label: "Autor"},
+      {name: "brandColor", type: "color", label: "Farbe", default: "#6366f1"}
+    ]),
+    1080, 1080, 1,
+    JSON.stringify({quote: "Führung heißt, Menschen zu befähigen.", author: "Thomas C. Stahl", brandColor: "#6366f1"})
+  );
+
+  insertTpl.run(DEFAULT_PROJECT_ID, 'Text-Karte', 'social',
+    `<div class="card">
+  <div class="title">{{title}}</div>
+  <div class="body">{{body}}</div>
+  <div class="watermark">🐢 schildi.ai</div>
+</div>`,
+    `.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background: #1a1a2e;
+  padding: 80px;
+  box-sizing: border-box;
+  font-family: 'Noto Sans', sans-serif;
+  color: #ffffff;
+  position: relative;
+}
+.title {
+  font-size: 64px;
+  font-weight: 700;
+  color: {{brandColor|#ef4444}};
+  text-align: center;
+  margin-bottom: 40px;
+  line-height: 1.1;
+}
+.body {
+  font-size: 36px;
+  text-align: center;
+  line-height: 1.4;
+}
+.watermark {
+  position: absolute;
+  bottom: 40px;
+  right: 40px;
+  font-size: 24px;
+  color: rgba(255,255,255,0.37);
+  font-weight: 600;
+}`,
+    JSON.stringify([
+      {name: "title", type: "text", label: "Titel"},
+      {name: "body", type: "textarea", label: "Text"},
+      {name: "brandColor", type: "color", label: "Farbe", default: "#ef4444"}
+    ]),
+    1080, 1080, 1,
+    JSON.stringify({title: "KI-Führung", body: "Dein wöchentliches Briefing", brandColor: "#ef4444"})
+  );
 }
 
 // Enable foreign keys after all migrations are done

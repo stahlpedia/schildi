@@ -7,12 +7,10 @@
     "build": "cd client && npm run build",
     "start": "NODE_ENV=production node server/index.js",
     "setup": "npm install && cd client && npm install && npm run build",
-    "test-render": "node -e \"require('./server/lib/renderer').renderTemplate('quote', {quote:'Test', author:'Schildi'}).then(png => require('fs').writeFileSync('render-test.png', png)).then(() => console.log('✅ Render test successful'))\""
+    "test-render": "node -e \"require('./server/lib/renderer').renderTemplate('Zitat-Karte', {quote:'Test', author:'Schildi'}).then(png => {require('fs').writeFileSync('render-test.png', png); console.log('✅ Render test successful'); return require('./server/lib/renderer').closeBrowser()}).catch(e => {console.error(e); process.exit(1)})\""
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
-    "@resvg/resvg-js": "^2.6.2",
-    "@vercel/og": "^0.8.6",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.7.0",
     "cors": "^2.8.5",
@@ -22,6 +20,6 @@
     "marked": "^15.0.0",
     "multer": "^2.0.2",
     "node-fetch": "^2.7.0",
-    "satori": "^0.19.2"
+    "puppeteer": "^23.0.0"
   }
 }

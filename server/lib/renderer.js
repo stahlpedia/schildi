@@ -1,221 +1,133 @@
-// satori is ESM-only, we need dynamic import
-let satori;
-let Resvg;
-try {
-  Resvg = require('@resvg/resvg-js').Resvg;
-} catch (e) {
-  console.warn('⚠️ @resvg/resvg-js nicht verfügbar (Alpine/musl?). PNG-Export deaktiviert.');
-  Resvg = null;
-}
+const db = require('../db');
 const fs = require('fs');
 const path = require('path');
 
-// Load fonts once
-let fontRegular, fontBold;
-try {
-  // Try NotoSans first (more reliable)
-  fontRegular = fs.readFileSync(path.join(__dirname, '../fonts/NotoSans-Regular.ttf'));
-  fontBold = fs.readFileSync(path.join(__dirname, '../fonts/NotoSans-Bold.ttf'));
-  console.log('Using NotoSans fonts');
-} catch (error) {
+let browser = null;
+
+/**
+ * Get or launch a shared Puppeteer browser instance.
+ */
+async function getBrowser() {
+  if (browser && browser.isConnected()) return browser;
+  const puppeteer = require('puppeteer');
+  browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  });
+  return browser;
+}
+
+/**
+ * Replace {{field}} and {{field|default}} placeholders in a string.
+ */
+function replacePlaceholders(str, data) {
+  return str.replace(/\{\{(\w+)(?:\|([^}]*))?\}\}/g, (match, key, defaultVal) => {
+    return data[key] !== undefined && data[key] !== '' ? data[key] : (defaultVal || '');
+  });
+}
+
+/**
+ * Load fonts as base64 data URIs for embedding in HTML.
+ */
+function getFontFaceCSS() {
+  const fontsDir = path.join(__dirname, '../fonts');
+  let css = '';
   try {
-    // Fallback to Inter if available
-    fontRegular = fs.readFileSync(path.join(__dirname, '../fonts/Inter-Regular.ttf'));
-    fontBold = fs.readFileSync(path.join(__dirname, '../fonts/Inter-Bold.ttf'));
-    console.log('Using Inter fonts');
-  } catch (error2) {
-    console.warn('No custom fonts found');
-    fontRegular = null;
-    fontBold = null;
+    const regular = fs.readFileSync(path.join(fontsDir, 'NotoSans-Regular.ttf'));
+    const bold = fs.readFileSync(path.join(fontsDir, 'NotoSans-Bold.ttf'));
+    css += `
+      @font-face {
+        font-family: 'Noto Sans';
+        font-weight: 400;
+        src: url(data:font/ttf;base64,${regular.toString('base64')}) format('truetype');
+      }
+      @font-face {
+        font-family: 'Noto Sans';
+        font-weight: 700;
+        src: url(data:font/ttf;base64,${bold.toString('base64')}) format('truetype');
+      }
+    `;
+  } catch {
+    console.warn('Fonts not found, using system fonts');
   }
+  return css;
 }
 
-// Template: Quote Card (satori-compatible)
-function quote(data, width, height) {
-  const { quote, author, brandColor = '#6366f1' } = data;
-  
-  return {
-    type: 'div',
-    props: {
-      style: {
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: width,
-        height: height,
-        background: `linear-gradient(135deg, ${brandColor} 0%, #1a1a2e 100%)`,
-        padding: '80px',
-        position: 'relative',
-        fontFamily: fontRegular ? 'CustomFont' : 'sans-serif',
-        color: '#ffffff',
-      },
-      children: [
-        // Quote text
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              fontSize: '48px',
-              fontWeight: 400,
-              textAlign: 'center',
-              lineHeight: '1.2',
-              marginBottom: '40px',
-            },
-            children: [`"${quote}"`]
-          }
-        },
-        // Author
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              fontSize: '32px',
-              fontWeight: 700,
-              color: '#ffffff90',
-              textAlign: 'center',
-            },
-            children: [`— ${author}`]
-          }
-        },
-        // Logo watermark
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              position: 'absolute',
-              bottom: '40px',
-              right: '40px',
-              fontSize: '24px',
-              color: '#ffffff60',
-              fontWeight: 600,
-            },
-            children: ['🐢 schildi.ai']
-          }
-        }
-      ]
-    }
-  };
-}
+const fontFaceCSS = getFontFaceCSS();
 
-// Template: Simple Text (for testing)
-function text(data, width, height) {
-  const { title, body, brandColor = '#ef4444' } = data;
-  
-  return {
-    type: 'div',
-    props: {
-      style: {
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: width,
-        height: height,
-        background: '#1a1a2e',
-        padding: '80px',
-        position: 'relative',
-        fontFamily: fontRegular ? 'CustomFont' : 'sans-serif',
-        color: '#ffffff',
-      },
-      children: [
-        // Title
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              fontSize: '64px',
-              fontWeight: 700,
-              color: brandColor,
-              textAlign: 'center',
-              marginBottom: '40px',
-              lineHeight: '1.1',
-            },
-            children: [title]
-          }
-        },
-        // Body
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              fontSize: '36px',
-              fontWeight: 400,
-              textAlign: 'center',
-              lineHeight: '1.4',
-            },
-            children: [body]
-          }
-        },
-        // Logo watermark
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              position: 'absolute',
-              bottom: '40px',
-              right: '40px',
-              fontSize: '24px',
-              color: '#ffffff60',
-              fontWeight: 600,
-            },
-            children: ['🐢 schildi.ai']
-          }
-        }
-      ]
-    }
-  };
-}
-
-// Template definitions - start with working ones
-const templates = { quote, text };
-
-async function renderTemplate(templateName, data, width = 1080, height = 1080, scale = 2) {
-  if (!Resvg) {
-    throw new Error('PNG-Export nicht verfügbar. @resvg/resvg-js konnte nicht geladen werden (Alpine Linux braucht glibc). Bitte Dockerfile auf node:22-slim umstellen.');
-  }
-  
-  // Load satori dynamically (ESM module)
-  if (!satori) {
-    const satoriModule = await import('satori');
-    satori = satoriModule.default;
-  }
-  
-  const template = templates[templateName];
-  if (!template) {
-    throw new Error('Unknown template: ' + templateName);
-  }
-  
-  const jsx = template(data, width, height);
-  
-  // Prepare fonts array - satori needs at least one font
-  const fonts = [];
-  if (fontRegular && fontBold) {
-    fonts.push(
-      { name: 'CustomFont', data: fontRegular, weight: 400, style: 'normal' },
-      { name: 'CustomFont', data: fontBold, weight: 700, style: 'normal' }
-    );
+/**
+ * Render a template by ID or name with given data.
+ *
+ * @param {number|string} templateIdOrName - Template ID or name
+ * @param {Object} data - Field values
+ * @param {Object} [options]
+ * @param {number} [options.width] - Override template width
+ * @param {number} [options.height] - Override template height
+ * @param {number} [options.scale=2] - Device scale factor
+ * @returns {Promise<Buffer>} PNG buffer
+ */
+async function renderTemplate(templateIdOrName, data, options = {}) {
+  // Look up template
+  let template;
+  if (typeof templateIdOrName === 'number') {
+    template = db.prepare('SELECT * FROM templates WHERE id = ?').get(templateIdOrName);
   } else {
-    throw new Error('Fonts are required but not available. Please download fonts first.');
+    template = db.prepare('SELECT * FROM templates WHERE name = ? OR id = ?').get(templateIdOrName, parseInt(templateIdOrName) || -1);
   }
-  
-  const svg = await satori(jsx, {
-    width: width * scale,
-    height: height * scale,
-    fonts,
-  });
-  
-  const resvg = new Resvg(svg, { 
-    fitTo: { mode: 'width', value: width * scale } 
-  });
-  const pngData = resvg.render();
-  return pngData.asPng();
+  if (!template) {
+    throw new Error(`Template nicht gefunden: ${templateIdOrName}`);
+  }
+
+  const width = options.width || template.width || 1080;
+  const height = options.height || template.height || 1080;
+  const scale = options.scale || 2;
+
+  // Replace placeholders in HTML and CSS
+  const html = replacePlaceholders(template.html, data);
+  const css = replacePlaceholders(template.css, data);
+
+  return renderHTML(html, css, width, height, scale);
 }
 
-module.exports = { renderTemplate };
+/**
+ * Render raw HTML/CSS to PNG.
+ *
+ * @param {string} html - HTML content
+ * @param {string} css - CSS styles
+ * @param {number} width
+ * @param {number} height
+ * @param {number} [scale=2]
+ * @returns {Promise<Buffer>} PNG buffer
+ */
+async function renderHTML(html, css, width = 1080, height = 1080, scale = 2) {
+  const fullHTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+${fontFaceCSS}
+* { margin: 0; padding: 0; }
+html, body { width: ${width}px; height: ${height}px; overflow: hidden; }
+${css}
+</style></head><body>${html}</body></html>`;
+
+  const b = await getBrowser();
+  const page = await b.newPage();
+  try {
+    await page.setViewport({ width, height, deviceScaleFactor: scale });
+    await page.setContent(fullHTML, { waitUntil: 'networkidle0' });
+    const png = await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width, height } });
+    return Buffer.from(png);
+  } finally {
+    await page.close();
+  }
+}
+
+/**
+ * Shutdown the shared browser instance (for graceful shutdown).
+ */
+async function closeBrowser() {
+  if (browser) {
+    await browser.close();
+    browser = null;
+  }
+}
+
+module.exports = { renderTemplate, renderHTML, replacePlaceholders, closeBrowser };

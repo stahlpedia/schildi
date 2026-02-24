@@ -86,3 +86,15 @@ app.get('*', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🐢 Schildi Dashboard läuft auf Port ${PORT}`);
 });
+
+// Graceful shutdown: close Puppeteer browser
+process.on('SIGTERM', async () => {
+  const { closeBrowser } = require('./lib/renderer');
+  await closeBrowser();
+  process.exit(0);
+});
+process.on('SIGINT', async () => {
+  const { closeBrowser } = require('./lib/renderer');
+  await closeBrowser();
+  process.exit(0);
+});

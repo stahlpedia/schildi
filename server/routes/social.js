@@ -218,14 +218,72 @@ router.delete('/assets/:assetId/media/:mediaId', (req, res) => {
 });
 
 // ============================================================
-// PNG Render API (kept from old social.js)
+// Template CRUD
+// ============================================================
+
+router.get('/templates', (req, res) => {
+  const projectId = req.params.projectId || db.DEFAULT_PROJECT_ID;
+  const templates = db.prepare('SELECT * FROM templates WHERE project_id = ? ORDER BY is_default DESC, name ASC').all(projectId);
+  res.json(templates.map(t => ({ ...t, fields: JSON.parse(t.fields || '[]'), preview_data: JSON.parse(t.preview_data || '{}') })));
+});
+
+router.get('/templates/:id', (req, res) => {
+  const template = db.prepare('SELECT * FROM templates WHERE id = ?').get(req.params.id);
+  if (!template) return res.status(404).json({ error: 'Template nicht gefunden' });
+  res.json({ ...template, fields: JSON.parse(template.fields || '[]'), preview_data: JSON.parse(template.preview_data || '{}') });
+});
+
+router.post('/templates', (req, res) => {
+  const projectId = req.params.projectId || db.DEFAULT_PROJECT_ID;
+  const { name, category = 'social', html = '', css = '', fields = [], width = 1080, height = 1080, preview_data = {} } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name erforderlich' });
+  const result = db.prepare(`INSERT INTO templates (project_id, name, category, html, css, fields, width, height, preview_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(projectId, name, category, html, css, JSON.stringify(fields), width, height, JSON.stringify(preview_data));
+  const tpl = db.prepare('SELECT * FROM templates WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json({ ...tpl, fields: JSON.parse(tpl.fields || '[]'), preview_data: JSON.parse(tpl.preview_data || '{}') });
+});
+
+router.put('/templates/:id', (req, res) => {
+  const tpl = db.prepare('SELECT * FROM templates WHERE id = ?').get(req.params.id);
+  if (!tpl) return res.status(404).json({ error: 'Template nicht gefunden' });
+  const { name, category, html, css, fields, width, height, preview_data } = req.body;
+  db.prepare(`UPDATE templates SET name=?, category=?, html=?, css=?, fields=?, width=?, height=?, preview_data=?, updated_at=datetime('now') WHERE id=?`)
+    .run(
+      name ?? tpl.name, category ?? tpl.category, html ?? tpl.html, css ?? tpl.css,
+      fields !== undefined ? JSON.stringify(fields) : tpl.fields,
+      width ?? tpl.width, height ?? tpl.height,
+      preview_data !== undefined ? JSON.stringify(preview_data) : tpl.preview_data,
+      req.params.id
+    );
+  const updated = db.prepare('SELECT * FROM templates WHERE id = ?').get(req.params.id);
+  res.json({ ...updated, fields: JSON.parse(updated.fields || '[]'), preview_data: JSON.parse(updated.preview_data || '{}') });
+});
+
+router.delete('/templates/:id', (req, res) => {
+  const tpl = db.prepare('SELECT * FROM templates WHERE id = ?').get(req.params.id);
+  if (!tpl) return res.status(404).json({ error: 'Template nicht gefunden' });
+  if (tpl.is_default) return res.status(400).json({ error: 'Default-Templates können nicht gelöscht werden' });
+  db.prepare('DELETE FROM templates WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ============================================================
+// PNG Render API (Puppeteer-based)
 // ============================================================
 
 router.post('/render', async (req, res) => {
   try {
-    const { template, data, width, height, scale } = req.body;
-    if (!template || !data) return res.status(400).json({ error: 'Template und data sind erforderlich' });
-    const png = await renderTemplate(template, data, width, height, scale);
+    const { template, data, width, height, scale, html, css } = req.body;
+    let png;
+    if (html) {
+      // Raw HTML/CSS render
+      const { renderHTML } = require('../lib/renderer');
+      png = await renderHTML(html, css || '', width || 1080, height || 1080, scale || 2);
+    } else if (template) {
+      png = await renderTemplate(template, data || {}, { width, height, scale });
+    } else {
+      return res.status(400).json({ error: 'template oder html erforderlich' });
+    }
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Content-Length', png.length);
     res.setHeader('Cache-Control', 'public, max-age=3600');
@@ -238,9 +296,16 @@ router.post('/render', async (req, res) => {
 
 router.post('/render/preview', async (req, res) => {
   try {
-    const { template, data, width, height } = req.body;
-    if (!template || !data) return res.status(400).json({ error: 'Template und data sind erforderlich' });
-    const png = await renderTemplate(template, data, width || 1080, height || 1080, 1);
+    const { template, data, width, height, html, css } = req.body;
+    let png;
+    if (html) {
+      const { renderHTML } = require('../lib/renderer');
+      png = await renderHTML(html, css || '', width || 1080, height || 1080, 1);
+    } else if (template) {
+      png = await renderTemplate(template, data || {}, { width: width || 1080, height: height || 1080, scale: 1 });
+    } else {
+      return res.status(400).json({ error: 'template oder html erforderlich' });
+    }
     const base64 = Buffer.from(png).toString('base64');
     res.json({ image: `data:image/png;base64,${base64}` });
   } catch (error) {
@@ -251,10 +316,17 @@ router.post('/render/preview', async (req, res) => {
 
 router.post('/render/save', async (req, res) => {
   try {
-    const { template, data, width, height, scale, filename, project_id } = req.body;
-    if (!template || !data) return res.status(400).json({ error: 'Template und data sind erforderlich' });
+    const { template, data, width, height, scale, filename, project_id, html, css } = req.body;
     const pid = project_id || db.DEFAULT_PROJECT_ID;
-    const png = await renderTemplate(template, data, width, height, scale);
+    let png;
+    if (html) {
+      const { renderHTML } = require('../lib/renderer');
+      png = await renderHTML(html, css || '', width || 1080, height || 1080, scale || 2);
+    } else if (template) {
+      png = await renderTemplate(template, data || {}, { width, height, scale });
+    } else {
+      return res.status(400).json({ error: 'template oder html erforderlich' });
+    }
 
     // Find or create "Generiert" context folder
     let folder = db.prepare("SELECT id FROM context_folders WHERE name = 'Generiert' AND is_system = 1 AND project_id = ?").get(pid);
@@ -263,14 +335,14 @@ router.post('/render/save', async (req, res) => {
       folder = { id: r.lastInsertRowid };
     }
 
-    const fname = filename || `social-${template}-${Date.now()}.png`;
+    const tplName = template || 'custom';
+    const fname = filename || `social-${tplName}-${Date.now()}.png`;
     const baseMediaDir = process.env.MEDIA_DIR || path.join(__dirname, '../../data/media');
 
-    // Insert DB record first to get ID
     const result = db.prepare(`
       INSERT INTO media_files (project_id, folder_id, filename, filepath, mimetype, size, tags, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-    `).run(pid, folder.id, fname, '', 'image/png', png.length, JSON.stringify(['generated', template]));
+    `).run(pid, folder.id, fname, '', 'image/png', png.length, JSON.stringify(['generated', tplName]));
 
     const fileId = result.lastInsertRowid;
     const storedName = `${fileId}_${fname}`;
@@ -281,7 +353,7 @@ router.post('/render/save', async (req, res) => {
 
     db.prepare('UPDATE media_files SET filepath = ? WHERE id = ?').run(filepath, fileId);
 
-    res.json({ id: fileId, filename: fname, size: png.length, folder: 'Generiert', template });
+    res.json({ id: fileId, filename: fname, size: png.length, folder: 'Generiert', template: tplName });
   } catch (error) {
     console.error('Render save error:', error);
     res.status(500).json({ error: `Fehler beim Speichern: ${error.message}` });
