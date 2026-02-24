@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { social, context } from '../api'
+import CardModal from './CardModal'
 
 const CHANNEL_TYPES = ['LinkedIn', 'Instagram', 'X', 'Newsletter', 'Blog', 'TikTok', 'YouTube', 'Sonstiges']
 const STATUS_OPTIONS = ['draft', 'ready', 'published']
@@ -9,7 +10,7 @@ const STATUS_COLORS = {
   published: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
 }
 
-export default function Social({ projectId }) {
+export default function Social({ projectId, onNavigateToKanban }) {
   // Channel state
   const [channels, setChannels] = useState([])
   const [selectedChannelId, setSelectedChannelId] = useState(null)
@@ -38,6 +39,7 @@ export default function Social({ projectId }) {
 
   // Mobile: show detail panel
   const [mobileShowDetail, setMobileShowDetail] = useState(false)
+  const [showCreateTask, setShowCreateTask] = useState(false)
 
   const selectedChannel = channels.find(c => c.id === selectedChannelId)
 
@@ -260,6 +262,9 @@ export default function Social({ projectId }) {
           </div>
         </div>
 
+        <button onClick={() => setShowCreateTask(true)}
+          className="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition-colors shrink-0">📋 Task erstellen</button>
+
         {/* Sub-view tabs */}
         {selectedChannel && (
           <div className="flex bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shrink-0">
@@ -432,6 +437,17 @@ export default function Social({ projectId }) {
           </div>
         </div>
       )}
+
+      {/* Create Task Modal */}
+      <CardModal
+        isOpen={showCreateTask}
+        onClose={() => setShowCreateTask(false)}
+        mode="create"
+        defaultColumnName="backlog"
+        defaultTitle=""
+        onSave={(task) => { setShowCreateTask(false); if (onNavigateToKanban && task) onNavigateToKanban(task.id) }}
+        projectId={projectId}
+      />
 
       {/* Asset Form Modal */}
       {showAssetForm && (

@@ -2,6 +2,23 @@ import React, { useState, useEffect, useRef } from 'react'
 import { kanban, columns as columnsApi, boards, projectBoards, projectCalendar } from '../api'
 import CardModal from './CardModal'
 
+function ResultBlock({ result }) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = result && result.length > 200
+  return (
+    <div className="mt-2 p-2 bg-blue-900/30 border border-blue-700/50 rounded text-xs">
+      <div className="text-blue-400 font-medium mb-1">🐢 Schildi Ergebnis:</div>
+      <div className={`text-blue-200 whitespace-pre-wrap break-words ${!expanded && isLong ? 'line-clamp-3' : ''}`}>{result}</div>
+      {isLong && (
+        <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded) }}
+          className="text-blue-400 hover:text-blue-300 mt-1 text-[10px] font-medium">
+          {expanded ? '▲ Weniger' : '▼ Mehr anzeigen'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 const DEFAULT_COLORS = [
   'border-gray-600', 'border-yellow-500', 'border-emerald-500',
   'border-blue-500', 'border-purple-500', 'border-red-500', 'border-orange-500'
@@ -391,12 +408,7 @@ export default function KanbanBoard(props = {}) {
                           ))}
                         </div>
                       )}
-                      {card.result && (
-                        <div className="mt-2 p-2 bg-blue-900/30 border border-blue-700/50 rounded text-xs">
-                          <div className="text-blue-400 font-medium mb-1">🐢 Schildi Ergebnis:</div>
-                          <div className="text-blue-200 line-clamp-3">{card.result}</div>
-                        </div>
-                      )}
+                      {card.result && <ResultBlock result={card.result} />}
                     </div>
                   ))}
                 </div>
@@ -456,12 +468,7 @@ export default function KanbanBoard(props = {}) {
                               {card.labels.map((l, i) => <span key={i} className="px-2 py-0.5 bg-emerald-900/50 text-emerald-300 text-xs rounded-full">{l}</span>)}
                             </div>
                           )}
-                          {card.result && (
-                            <div className="mt-2 p-2 bg-blue-900/30 border border-blue-700/50 rounded text-xs">
-                              <div className="text-blue-400 font-medium mb-1">🐢 Schildi Ergebnis:</div>
-                              <div className="text-blue-200 line-clamp-3">{card.result}</div>
-                            </div>
-                          )}
+                          {card.result && <ResultBlock result={card.result} />}
                         </div>
                       )
                     })}

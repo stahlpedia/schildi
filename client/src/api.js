@@ -255,6 +255,18 @@ export const context = {
   serve: (id) => `${BASE}/media/file/${id}`,
 };
 
+// Templates API (project-scoped)
+export const templates = {
+  list: (pid) => api(`/projects/${pid}/social/templates`),
+  get: (pid, id) => api(`/projects/${pid}/social/templates/${id}`),
+  create: (pid, data) => api(`/projects/${pid}/social/templates`, { method: 'POST', body: JSON.stringify(data) }),
+  update: (pid, id, data) => api(`/projects/${pid}/social/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (pid, id) => api(`/projects/${pid}/social/templates/${id}`, { method: 'DELETE' }),
+  preview: (pid, data) => fetch(`${BASE}/projects/${pid}/social/render/preview`, {
+    method: 'POST', headers: headers(), body: JSON.stringify(data)
+  }).then(r => r.json()),
+};
+
 // Social API (project-scoped)
 export const social = {
   channels: (pid) => api(`/projects/${pid}/social/channels`),

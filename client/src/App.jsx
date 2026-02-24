@@ -7,8 +7,9 @@ import Channel from './components/Channel'
 import Pages from './components/Pages'
 import Context from './components/Context'
 import Social from './components/Social'
+import Skills from './components/Skills'
 
-const TABS = ['Kanban', 'Social', 'Pages', 'Kontext', 'Channels', 'Admin']
+const TABS = ['Kanban', 'Content', 'Webapps', 'Skills', 'Kontext', 'Admin']
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn())
@@ -74,10 +75,6 @@ export default function App() {
       window.removeEventListener('brandingUpdated', handleBrandingUpdate)
     }
   }, [loggedIn])
-
-  useEffect(() => {
-    if (tab === 'Channels') checkUnanswered()
-  }, [tab])
 
   useEffect(() => {
     if (currentProject) {
@@ -240,11 +237,6 @@ export default function App() {
                   tab === t ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                 }`}>
                 {t === 'Admin' ? '⚙️' : t}
-                {t === 'Channels' && unansweredCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white">
-                    {unansweredCount}
-                  </span>
-                )}
               </button>
             ))}
           </nav>
@@ -274,11 +266,6 @@ export default function App() {
                   <span className="font-medium">
                     {t === 'Admin' ? '⚙️ Admin' : t}
                   </span>
-                  {t === 'Channels' && unansweredCount > 0 && (
-                    <span className="w-5 h-5 bg-red-500 rounded-full text-xs font-bold flex items-center justify-center text-white">
-                      {unansweredCount}
-                    </span>
-                  )}
                 </button>
               ))}
             </div>
@@ -290,10 +277,10 @@ export default function App() {
         <div style={{ display: tab === 'Kanban' ? 'block' : 'none' }}>
           <KanbanBoard projectId={projectId} highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
         </div>
-        <div style={{ display: tab === 'Social' ? 'block' : 'none' }}><Social projectId={projectId} /></div>
-        <div style={{ display: tab === 'Pages' ? 'block' : 'none' }}><Pages projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
+        <div style={{ display: tab === 'Content' ? 'block' : 'none' }}><Social projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
+        <div style={{ display: tab === 'Webapps' ? 'block' : 'none' }}><Pages projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
+        <div style={{ display: tab === 'Skills' ? 'block' : 'none' }}><Skills projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
         <div style={{ display: tab === 'Kontext' ? 'block' : 'none' }}><Context projectId={projectId} /></div>
-        <div style={{ display: tab === 'Channels' ? 'block' : 'none' }}><Channel projectId={projectId} onUpdate={checkUnanswered} /></div>
         <div style={{ display: tab === 'Admin' ? 'block' : 'none' }}><Admin onLogout={() => { logout(); setLoggedIn(false) }} /></div>
       </main>
 
