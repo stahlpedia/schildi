@@ -288,4 +288,69 @@ router.post('/render/save', async (req, res) => {
   }
 });
 
+// ============================================================
+// Video Render API
+// ============================================================
+
+const { renderVideo } = require('../lib/video-renderer');
+
+router.post('/render/video', async (req, res) => {
+  try {
+    const { slides, audio_url, audio_path, width, height, fps, transition, transition_duration } = req.body;
+    if (!slides || !Array.isArray(slides) || slides.length === 0) {
+      return res.status(400).json({ error: 'slides Array erforderlich (min. 1 Slide)' });
+    }
+    const mp4 = await renderVideo(slides, { audio_url, audio_path, width, height, fps, transition, transition_duration });
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Length', mp4.length);
+    res.send(mp4);
+  } catch (error) {
+    console.error('Video render error:', error);
+    res.status(500).json({ error: `Fehler beim Video-Rendern: ${error.message}` });
+  }
+});
+
+router.post('/render/video/save', async (req, res) => {
+  try {
+    const { slides, audio_url, audio_path, width, height, fps, transition, transition_duration, filename, project_id } = req.body;
+    if (!slides || !Array.isArray(slides) || slides.length === 0) {
+      return res.status(400).json({ error: 'slides Array erforderlich (min. 1 Slide)' });
+    }
+    const pid = project_id || db.DEFAULT_PROJECT_ID;
+    const mp4 = await renderVideo(slides, { audio_url, audio_path, width, height, fps, transition, transition_duration });
+
+    // Find or create "Generiert" folder
+    let folder = db.prepare("SELECT id FROM context_folders WHERE name = 'Generiert' AND is_system = 1 AND project_id = ?").get(pid);
+    if (!folder) {
+      const r = db.prepare("INSERT INTO context_folders (project_id, name, type, is_system) VALUES (?, 'Generiert', 'system', 1)").run(pid);
+      folder = { id: r.lastInsertRowid };
+    }
+
+    const fname = filename || `video-${Date.now()}.mp4`;
+    const baseMediaDir = process.env.MEDIA_DIR || path.join(__dirname, '../../data/media');
+
+    const result = db.prepare(`
+      INSERT INTO media_files (project_id, folder_id, filename, filepath, mimetype, size, tags, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).run(pid, folder.id, fname, '', 'video/mp4', mp4.length, JSON.stringify(['generated', 'video']));
+
+    const fileId = result.lastInsertRowid;
+    const storedName = `${fileId}_${fname}`;
+    const mediaSubDir = path.join(baseMediaDir, String(folder.id));
+    fs.mkdirSync(mediaSubDir, { recursive: true });
+    const filepath = path.join(mediaSubDir, storedName);
+    fs.writeFileSync(filepath, mp4);
+
+    db.prepare('UPDATE media_files SET filepath = ? WHERE id = ?').run(filepath, fileId);
+
+    // Calculate total duration
+    const totalDuration = slides.reduce((sum, s) => sum + (s.duration || 5), 0);
+
+    res.json({ id: fileId, filename: fname, size: mp4.length, folder: 'Generiert', duration: totalDuration });
+  } catch (error) {
+    console.error('Video render/save error:', error);
+    res.status(500).json({ error: `Fehler beim Video-Speichern: ${error.message}` });
+  }
+});
+
 module.exports = router;
