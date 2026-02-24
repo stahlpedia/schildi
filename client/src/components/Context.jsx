@@ -36,7 +36,7 @@ export default function Context({ projectId }) {
 
   const loadFolders = async () => {
     try {
-      const folderList = await context.folders(projectId)
+      const folderList = await context.folders(projectId, 'context')
       setFolders(folderList)
       if (folderList.length > 0 && !selectedFolder) setSelectedFolder(folderList[0].id)
     } catch (error) {
@@ -59,7 +59,7 @@ export default function Context({ projectId }) {
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return
     try {
-      await context.createFolder(projectId, { name: newFolderName, parent_id: null })
+      await context.createFolder(projectId, { name: newFolderName, parent_id: null, category: 'context' })
       setNewFolderName('')
       setShowNewFolder(false)
       await loadFolders()

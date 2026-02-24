@@ -497,8 +497,8 @@ if (defaultChannel) {
 // Seed default context folders if empty
 const ctxFolderCount = db.prepare('SELECT COUNT(*) as c FROM context_folders').get();
 if (ctxFolderCount.c === 0) {
-  db.prepare("INSERT INTO context_folders (project_id, name, type, is_system) VALUES (?, ?, ?, ?)").run(DEFAULT_PROJECT_ID, 'Generiert', 'system', 1);
-  db.prepare("INSERT INTO context_folders (project_id, name, type, is_system) VALUES (?, ?, ?, ?)").run(DEFAULT_PROJECT_ID, 'Persönlicher Stock', 'system', 1);
+  db.prepare("INSERT INTO context_folders (project_id, name, type, is_system, category) VALUES (?, ?, ?, ?, ?)").run(DEFAULT_PROJECT_ID, 'Generiert', 'system', 1, 'content');
+  db.prepare("INSERT INTO context_folders (project_id, name, type, is_system, category) VALUES (?, ?, ?, ?, ?)").run(DEFAULT_PROJECT_ID, 'Persönlicher Stock', 'system', 1, 'context');
 }
 
 // Seed default templates if empty
@@ -604,6 +604,17 @@ if (templateCount.c === 0) {
     1080, 1080, 1,
     JSON.stringify({title: "KI-Führung", body: "Dein wöchentliches Briefing", brandColor: "#ef4444"})
   );
+}
+
+// --- Migration: Add category column to context_folders ---
+try {
+  db.prepare("SELECT category FROM context_folders LIMIT 1").get();
+} catch {
+  db.prepare("ALTER TABLE context_folders ADD COLUMN category TEXT DEFAULT 'content'").run();
+  // Set "Persönlicher Stock" folders to context category
+  db.prepare("UPDATE context_folders SET category = 'context' WHERE name = 'Persönlicher Stock'").run();
+  // Set "Generiert" folders to content category
+  db.prepare("UPDATE context_folders SET category = 'content' WHERE name = 'Generiert'").run();
 }
 
 // Enable foreign keys after all migrations are done

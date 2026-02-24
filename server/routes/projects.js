@@ -41,10 +41,10 @@ router.post('/', (req, res) => {
   insertCol.run('done', 'Done', 'border-emerald-500', 3, boardId);
 
   // Create default context folders
-  db.prepare("INSERT INTO context_folders (project_id, name, type, is_system) VALUES (?, ?, ?, ?)")
-    .run(projectId, 'Generiert', 'system', 1);
-  db.prepare("INSERT INTO context_folders (project_id, name, type, is_system) VALUES (?, ?, ?, ?)")
-    .run(projectId, 'Persönlicher Stock', 'system', 1);
+  db.prepare("INSERT INTO context_folders (project_id, name, type, is_system, category) VALUES (?, ?, ?, ?, ?)")
+    .run(projectId, 'Generiert', 'system', 1, 'content');
+  db.prepare("INSERT INTO context_folders (project_id, name, type, is_system, category) VALUES (?, ?, ?, ?, ?)")
+    .run(projectId, 'Persönlicher Stock', 'system', 1, 'context');
 
   // Create default chat channel
   db.prepare("INSERT INTO chat_channels (project_id, name, slug, type, is_default) VALUES (?, ?, ?, ?, ?)")

@@ -6,7 +6,7 @@ import Admin from './components/Admin'
 import Channel from './components/Channel'
 import Pages from './components/Pages'
 import Context from './components/Context'
-import Social from './components/Social'
+import Content from './components/Content'
 import Skills from './components/Skills'
 
 const TABS = ['Kanban', 'Content', 'Webapps', 'Channels', 'Skills', 'Kontext', 'Admin']
@@ -277,7 +277,7 @@ export default function App() {
         <div style={{ display: tab === 'Kanban' ? 'block' : 'none' }}>
           <KanbanBoard projectId={projectId} highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
         </div>
-        <div style={{ display: tab === 'Content' ? 'block' : 'none' }}><Social projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
+        <div style={{ display: tab === 'Content' ? 'block' : 'none' }}><Content projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
         <div style={{ display: tab === 'Webapps' ? 'block' : 'none' }}><Pages projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
         <div style={{ display: tab === 'Channels' ? 'block' : 'none' }}><Channel projectId={projectId} /></div>
         <div style={{ display: tab === 'Skills' ? 'block' : 'none' }}><Skills projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>

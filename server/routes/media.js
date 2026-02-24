@@ -32,20 +32,23 @@ const upload = multer({
 router.get('/folders', (req, res) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: 'projectId required' });
-  const folders = db.prepare(`
-    SELECT f.*, (SELECT COUNT(*) FROM media_files WHERE folder_id = f.id) as file_count
-    FROM context_folders f WHERE f.project_id = ? ORDER BY is_system DESC, position ASC, name ASC
-  `).all(projectId);
+  const { category } = req.query;
+  let sql = `SELECT f.*, (SELECT COUNT(*) FROM media_files WHERE folder_id = f.id) as file_count
+    FROM context_folders f WHERE f.project_id = ?`;
+  const params = [projectId];
+  if (category) { sql += ' AND f.category = ?'; params.push(category); }
+  sql += ' ORDER BY is_system DESC, position ASC, name ASC';
+  const folders = db.prepare(sql).all(...params);
   res.json(folders);
 });
 
 router.post('/folders', (req, res) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: 'projectId required' });
-  const { name, type = 'custom', parent_id } = req.body;
+  const { name, type = 'custom', parent_id, category = 'content' } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Name erforderlich' });
-  const result = db.prepare('INSERT INTO context_folders (project_id, name, type, parent_id) VALUES (?, ?, ?, ?)')
-    .run(projectId, name.trim(), type, parent_id || null);
+  const result = db.prepare('INSERT INTO context_folders (project_id, name, type, parent_id, category) VALUES (?, ?, ?, ?, ?)')
+    .run(projectId, name.trim(), type, parent_id || null, category);
   res.status(201).json(db.prepare('SELECT * FROM context_folders WHERE id = ?').get(result.lastInsertRowid));
 });
 

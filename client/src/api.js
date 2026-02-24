@@ -228,7 +228,7 @@ export const media = {
 
 // Context API (project-scoped media, replaces media for project contexts)
 export const context = {
-  folders: (pid) => api(`/projects/${pid}/context/folders`),
+  folders: (pid, category) => api(`/projects/${pid}/context/folders${category ? '?category=' + category : ''}`),
   createFolder: (pid, data) => api(`/projects/${pid}/context/folders`, { method: 'POST', body: JSON.stringify(data) }),
   updateFolder: (pid, id, data) => api(`/projects/${pid}/context/folders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteFolder: (pid, id, confirm = false) => api(`/projects/${pid}/context/folders/${id}?confirm=${confirm}`, { method: 'DELETE' }),
