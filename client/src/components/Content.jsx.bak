@@ -4,9 +4,9 @@ import CardModal from './CardModal'
 
 export default function Content({ projectId, onNavigateToKanban }) {
   const [subView, setSubView] = useState('content')
-
-  // Channel state
-  const [channels, setChannels] = useState([])
+  
+  // Content channel state
+  const [contentChannels, setContentChannels] = useState([])
   const [selectedChannelId, setSelectedChannelId] = useState(null)
   const [showChannelDropdown, setShowChannelDropdown] = useState(false)
   const [showChannelForm, setShowChannelForm] = useState(false)
@@ -21,40 +21,38 @@ export default function Content({ projectId, onNavigateToKanban }) {
   const [uploading, setUploading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-
+  
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [editingFolder, setEditingFolder] = useState(null)
   const [editFolderName, setEditFolderName] = useState('')
-
+  
   const [selectedFile, setSelectedFile] = useState(null)
   const [showFileModal, setShowFileModal] = useState(false)
   const [editingFile, setEditingFile] = useState(null)
   const [fileEditTags, setFileEditTags] = useState('')
   const [fileEditAltText, setFileEditAltText] = useState('')
-
+  
   const fileInputRef = useRef(null)
-
+  
   // Profile state
   const [profileForm, setProfileForm] = useState({ topics: '', target_audience: '', tone: '', notes: '' })
-
+  
   // Task creation
   const [showCreateTask, setShowCreateTask] = useState(false)
 
-  const selectedChannel = channels.find(c => c.id === selectedChannelId)
+  const selectedChannel = contentChannels.find(c => c.id === selectedChannelId)
 
   useEffect(() => {
     if (projectId) {
       setLoading(true)
-      loadChannels()
+      loadContentChannels()
       loadProfile()
     }
   }, [projectId])
 
   useEffect(() => {
     if (projectId) {
-      setSelectedFolder(null)
-      setFiles([])
       loadFolders()
     }
   }, [selectedChannelId, projectId])
@@ -63,24 +61,19 @@ export default function Content({ projectId, onNavigateToKanban }) {
     if (selectedFolder && projectId) loadFiles()
   }, [selectedFolder, searchTerm, projectId])
 
-  const loadChannels = async () => {
+  const loadContentChannels = async () => {
     try {
       const list = await context.contentChannels(projectId)
-      setChannels(list)
-      if (list.length > 0 && !selectedChannelId) setSelectedChannelId(list[0].id)
-    } catch (error) {
-      console.error('Fehler beim Laden der Kanäle:', error)
-    } finally {
-      setLoading(false)
-    }
+      setContentChannels(list)
+      // Don't auto-select; null means "Alle" (show all folders)
+    } catch (e) { console.error(e) }
   }
 
   const loadFolders = async () => {
     try {
-      const params = selectedChannelId ? `content&channel_id=${selectedChannelId}` : 'content'
-      const folderList = await context.folders(projectId, params)
+      const folderList = await context.folders(projectId, 'content', selectedChannelId || undefined)
       setFolders(folderList)
-      if (folderList.length > 0 && !selectedFolder) setSelectedFolder(folderList[0].id)
+      setSelectedFolder(folderList.length > 0 ? folderList[0].id : null)
     } catch (error) {
       console.error('Fehler beim Laden der Ordner:', error)
     } finally {
@@ -112,7 +105,7 @@ export default function Content({ projectId, onNavigateToKanban }) {
     }
   }
 
-  // Channel CRUD
+  // Content Channel CRUD
   const handleSaveChannel = async () => {
     if (!channelForm.name.trim()) return
     try {
@@ -125,23 +118,24 @@ export default function Content({ projectId, onNavigateToKanban }) {
       setShowChannelForm(false)
       setEditingChannel(null)
       setChannelForm({ name: '' })
-      await loadChannels()
-    } catch (e) { alert(e.message) }
+      await loadContentChannels()
+    } catch (e) { alert('Fehler: ' + e.message) }
   }
 
   const handleDeleteChannel = async (id) => {
-    if (!confirm('Kanal löschen? Ordner bleiben erhalten.')) return
+    if (!confirm('Rubrik löschen? Ordner werden nicht gelöscht, nur die Zuordnung entfernt.')) return
     try {
       await context.deleteContentChannel(projectId, id)
-      if (selectedChannelId === id) setSelectedChannelId(channels.find(c => c.id !== id)?.id || null)
-      await loadChannels()
+      if (selectedChannelId === id) setSelectedChannelId(null)
+      await loadContentChannels()
+      await loadFolders()
     } catch (e) { alert(e.message) }
   }
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return
     try {
-      await context.createFolder(projectId, { name: newFolderName, parent_id: null, category: 'content', channel_id: selectedChannelId || undefined })
+      await context.createFolder(projectId, { name: newFolderName, parent_id: null, category: 'content', channel_id: selectedChannelId || null })
       setNewFolderName('')
       setShowNewFolder(false)
       await loadFolders()
@@ -243,7 +237,6 @@ export default function Content({ projectId, onNavigateToKanban }) {
 
   const isImage = (mimetype) => mimetype?.startsWith('image/')
   const isVideo = (mimetype) => mimetype?.startsWith('video/')
-  const isAudio = (mimetype) => mimetype?.startsWith('audio/')
   const serveUrl = (id) => context.serve(id)
 
   if (!projectId) return <div className="text-gray-500 text-center py-20">Bitte wähle ein Projekt aus.</div>
@@ -252,16 +245,16 @@ export default function Content({ projectId, onNavigateToKanban }) {
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
-      {/* Top bar: Channel selector + tabs + task button */}
+      {/* Top bar with channel selector, tabs, and task button */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 bg-gray-900 rounded-xl border border-gray-800 px-4 py-3 mb-4 shrink-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          {/* Channel Selector */}
+          {/* Channel/Rubrik Selector */}
           <div className="relative flex-1 min-w-0 max-w-xs">
             <button
               onClick={() => setShowChannelDropdown(!showChannelDropdown)}
               className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white hover:border-gray-600 transition-colors"
             >
-              <span className="truncate">{selectedChannel ? selectedChannel.name : 'Kanal wählen...'}</span>
+              <span className="truncate">{selectedChannel ? selectedChannel.name : 'Alle Inhalte'}</span>
               <svg className="w-3 h-3 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
@@ -270,9 +263,16 @@ export default function Content({ projectId, onNavigateToKanban }) {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowChannelDropdown(false)} />
                 <div className="absolute top-full left-0 mt-1 w-full bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 py-1 max-h-80 overflow-y-auto">
-                  {channels.map(ch => (
+                  <button
+                    onClick={() => { setSelectedChannelId(null); setShowChannelDropdown(false); setSelectedFolder(null) }}
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-gray-700 transition-colors ${
+                      !selectedChannelId ? 'bg-gray-700/50 text-emerald-300' : 'text-gray-200'
+                    }`}>
+                    Alle Inhalte
+                  </button>
+                  {contentChannels.map(ch => (
                     <button key={ch.id}
-                      onClick={() => { setSelectedChannelId(ch.id); setShowChannelDropdown(false) }}
+                      onClick={() => { setSelectedChannelId(ch.id); setShowChannelDropdown(false); setSelectedFolder(null) }}
                       className={`w-full flex items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-gray-700 transition-colors ${
                         selectedChannelId === ch.id ? 'bg-gray-700/50 text-emerald-300' : 'text-gray-200'
                       }`}>
@@ -293,7 +293,7 @@ export default function Content({ projectId, onNavigateToKanban }) {
                     <button onClick={() => { setShowChannelDropdown(false); setEditingChannel(null); setChannelForm({ name: '' }); setShowChannelForm(true) }}
                       className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-emerald-400 hover:bg-gray-700 transition-colors">
                       <span className="text-lg leading-none">+</span>
-                      <span>Neuer Kanal</span>
+                      <span>Neue Rubrik</span>
                     </button>
                   </div>
                 </div>
@@ -305,7 +305,6 @@ export default function Content({ projectId, onNavigateToKanban }) {
         <button onClick={() => setShowCreateTask(true)}
           className="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition-colors shrink-0">Task erstellen</button>
 
-        {/* Sub-view tabs */}
         <div className="flex bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shrink-0">
           <button onClick={() => setSubView('content')}
             className={`px-4 py-2 text-xs font-medium transition-colors ${subView === 'content' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'}`}>
@@ -318,20 +317,18 @@ export default function Content({ projectId, onNavigateToKanban }) {
         </div>
       </div>
 
-      {/* Channel Form Modal */}
+      {/* Channel Create/Edit Modal */}
       {showChannelForm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowChannelForm(false)}>
           <div className="bg-gray-900 rounded-xl border border-gray-700 p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-4">{editingChannel ? 'Kanal bearbeiten' : 'Neuer Kanal'}</h3>
-            <input value={channelForm.name} onChange={e => setChannelForm({ ...channelForm, name: e.target.value })} placeholder="Kanal-Name"
+            <h3 className="text-lg font-bold text-white mb-4">{editingChannel ? 'Rubrik bearbeiten' : 'Neue Rubrik'}</h3>
+            <input value={channelForm.name} onChange={e => setChannelForm({ ...channelForm, name: e.target.value })} placeholder="Name der Rubrik"
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500 mb-4"
               onKeyDown={e => { if (e.key === 'Enter') handleSaveChannel() }}
               autoFocus />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => { setShowChannelForm(false); setEditingChannel(null) }}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Abbrechen</button>
-              <button onClick={handleSaveChannel}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Speichern</button>
+              <button onClick={() => setShowChannelForm(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Abbrechen</button>
+              <button onClick={handleSaveChannel} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Speichern</button>
             </div>
           </div>
         </div>
@@ -377,7 +374,7 @@ export default function Content({ projectId, onNavigateToKanban }) {
               <button onClick={() => setShowNewFolder(true)}
                 className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium transition-colors">+ Ordner</button>
             </div>
-
+            
             {showNewFolder && (
               <div className="p-3 border-b border-gray-800 flex gap-2">
                 <input value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="Ordner-Name"
@@ -490,11 +487,6 @@ export default function Content({ projectId, onNavigateToKanban }) {
                                 <div className="text-3xl">🎬</div>
                                 <div className="text-[10px] text-gray-400 mt-1 px-2 truncate">MP4</div>
                               </div>
-                            ) : isAudio(file.mimetype) ? (
-                              <div className="text-center">
-                                <div className="text-3xl">🎵</div>
-                                <div className="text-[10px] text-gray-400 mt-1 px-2 truncate">{file.filename?.split('.').pop()?.toUpperCase()}</div>
-                              </div>
                             ) : (
                               <div className="text-center">
                                 <div className="text-3xl">📄</div>
@@ -522,8 +514,8 @@ export default function Content({ projectId, onNavigateToKanban }) {
             ) : (
               <div className="flex-1 flex items-center justify-center text-gray-500">
                 <div className="text-center">
-                  <div className="text-6xl mb-4">{channels.length === 0 ? '📱' : '📂'}</div>
-                  <div className="text-lg">{channels.length === 0 ? 'Erstelle einen Kanal um loszulegen' : 'Wähle einen Ordner'}</div>
+                  <div className="text-6xl mb-4">📂</div>
+                  <div className="text-lg">Wähle einen Ordner</div>
                 </div>
               </div>
             )}
@@ -543,11 +535,6 @@ export default function Content({ projectId, onNavigateToKanban }) {
                       <img src={serveUrl(selectedFile.id)} alt={selectedFile.alt_text || selectedFile.filename} className="max-w-full max-h-full object-contain" />
                     ) : isVideo(selectedFile.mimetype) ? (
                       <video src={serveUrl(selectedFile.id)} controls className="max-w-full max-h-full" />
-                    ) : isAudio(selectedFile.mimetype) ? (
-                      <div className="text-center p-8">
-                        <div className="text-6xl mb-4">🎵</div>
-                        <audio src={serveUrl(selectedFile.id)} controls className="w-full max-w-md" />
-                      </div>
                     ) : (
                       <div className="text-center">
                         <div className="text-6xl mb-4">📄</div>
