@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { templates } from '../api'
 import CardModal from './CardModal'
+import SkillsViewer from './SkillsViewer'
 
 function useCodeMirror(containerRef, value, onChange, mode, active) {
   const editorRef = useRef(null)
@@ -62,6 +63,7 @@ function useCodeMirror(containerRef, value, onChange, mode, active) {
 }
 
 export default function Skills({ projectId, onNavigateToKanban }) {
+  const [view, setView] = useState('skills') // 'skills' | 'templates'
   const [templateList, setTemplateList] = useState([])
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -188,14 +190,27 @@ export default function Skills({ projectId, onNavigateToKanban }) {
     <div className="w-full max-w-full overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
       {/* Top Bar */}
       <div className="flex items-center gap-3 bg-gray-900 rounded-xl border border-gray-800 px-4 py-3 mb-4 shrink-0">
-        <span className="text-lg">🧩</span>
-        <span className="text-sm font-semibold text-gray-300 flex-1">Skills &amp; Templates</span>
-        <button onClick={() => setShowCreateTask(true)}
-          className="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition-colors">📋 Task erstellen</button>
-        <button onClick={handleNew}
-          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Neues Template</button>
+        <select value={view} onChange={e => setView(e.target.value)}
+          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+          <option value="skills">Skills</option>
+          <option value="templates">Templates</option>
+        </select>
+        <div className="flex-1" />
+        {view === 'templates' && (
+          <>
+            <button onClick={() => setShowCreateTask(true)}
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition-colors">📋 Task erstellen</button>
+            <button onClick={handleNew}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Neues Template</button>
+          </>
+        )}
       </div>
 
+      {view === 'skills' ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <SkillsViewer projectId={projectId} onNavigateToKanban={onNavigateToKanban} />
+        </div>
+      ) : (
       <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
         {/* Left: Template list */}
         <div className="w-64 shrink-0 bg-gray-900 rounded-xl border border-gray-800 flex flex-col overflow-hidden">
@@ -358,6 +373,7 @@ export default function Skills({ projectId, onNavigateToKanban }) {
           )}
         </div>
       </div>
+      )}
 
       {/* Task Modal */}
       <CardModal

@@ -55,6 +55,7 @@ app.use('/api/channel', require('./routes/channel'));
 app.use('/api/pages', require('./routes/pages'));
 app.use('/api/attachments', require('./routes/attachments'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/skills', require('./routes/skills'));
 
 // Project-scoped route mounts
 // Kanban: /api/projects/:projectId/boards, /api/projects/:projectId/calendar

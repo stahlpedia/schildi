@@ -76,6 +76,12 @@ export const memory = {
   file: (path) => api(`/memory/file?path=${encodeURIComponent(path)}`),
 };
 
+export const skills = {
+  list: () => api('/skills'),
+  get: (id) => api(`/skills/${id}`),
+  file: (id, path) => api(`/skills/${id}/file?path=${encodeURIComponent(path)}`),
+};
+
 export const log = {
   list: (limit = 50) => api(`/log/entries?limit=${limit}`),
   create: (message, category = '') => api('/log/entries', { method: 'POST', body: JSON.stringify({ message, category }) }),
