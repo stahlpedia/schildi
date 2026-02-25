@@ -19,7 +19,10 @@ const upload = multer({
     const allowedMimes = [
       'image/jpeg', 'image/png', 'image/gif', 'image/webp',
       'application/pdf', 'text/plain', 'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/mp4',
+      'video/mp4', 'video/webm',
+      'text/markdown'
     ];
     cb(null, allowedMimes.includes(file.mimetype));
   }
