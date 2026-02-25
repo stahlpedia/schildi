@@ -242,7 +242,7 @@ export default function Context({ projectId }) {
                   <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Dateien durchsuchen..."
                     className="flex-1 md:w-64 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
                   <div className="flex gap-2">
-                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx,.txt,.md" />
+                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt,.md,.mp3,.wav,.ogg,.mp4,.webm" />
                     <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
                       {uploading ? 'Upload...' : 'Upload'}

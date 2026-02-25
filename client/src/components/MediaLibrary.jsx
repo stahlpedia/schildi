@@ -399,7 +399,7 @@ export default function MediaLibrary() {
                     ref={fileInputRef}
                     onChange={handleFileUpload}
                     className="hidden"
-                    accept="image/*,.pdf,.doc,.docx,.txt"
+                    accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt,.md,.mp3,.wav,.ogg,.mp4,.webm"
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
