@@ -5,6 +5,14 @@ import CardModal from './CardModal'
 export default function Content({ projectId, onNavigateToKanban }) {
   const [subView, setSubView] = useState('content')
   
+  // Content channel state
+  const [contentChannels, setContentChannels] = useState([])
+  const [selectedChannelId, setSelectedChannelId] = useState(null)
+  const [showChannelDropdown, setShowChannelDropdown] = useState(false)
+  const [showChannelForm, setShowChannelForm] = useState(false)
+  const [editingChannel, setEditingChannel] = useState(null)
+  const [channelForm, setChannelForm] = useState({ name: '' })
+
   // File browser state
   const [folders, setFolders] = useState([])
   const [files, setFiles] = useState([])
@@ -33,23 +41,39 @@ export default function Content({ projectId, onNavigateToKanban }) {
   // Task creation
   const [showCreateTask, setShowCreateTask] = useState(false)
 
+  const selectedChannel = contentChannels.find(c => c.id === selectedChannelId)
+
   useEffect(() => {
     if (projectId) {
       setLoading(true)
-      loadFolders()
+      loadContentChannels()
       loadProfile()
     }
   }, [projectId])
 
   useEffect(() => {
+    if (projectId) {
+      loadFolders()
+    }
+  }, [selectedChannelId, projectId])
+
+  useEffect(() => {
     if (selectedFolder && projectId) loadFiles()
   }, [selectedFolder, searchTerm, projectId])
 
+  const loadContentChannels = async () => {
+    try {
+      const list = await context.contentChannels(projectId)
+      setContentChannels(list)
+      // Don't auto-select; null means "Alle" (show all folders)
+    } catch (e) { console.error(e) }
+  }
+
   const loadFolders = async () => {
     try {
-      const folderList = await context.folders(projectId, 'content')
+      const folderList = await context.folders(projectId, 'content', selectedChannelId || undefined)
       setFolders(folderList)
-      if (folderList.length > 0 && !selectedFolder) setSelectedFolder(folderList[0].id)
+      setSelectedFolder(folderList.length > 0 ? folderList[0].id : null)
     } catch (error) {
       console.error('Fehler beim Laden der Ordner:', error)
     } finally {
@@ -81,10 +105,37 @@ export default function Content({ projectId, onNavigateToKanban }) {
     }
   }
 
+  // Content Channel CRUD
+  const handleSaveChannel = async () => {
+    if (!channelForm.name.trim()) return
+    try {
+      if (editingChannel) {
+        await context.updateContentChannel(projectId, editingChannel.id, channelForm)
+      } else {
+        const created = await context.createContentChannel(projectId, channelForm)
+        setSelectedChannelId(created.id)
+      }
+      setShowChannelForm(false)
+      setEditingChannel(null)
+      setChannelForm({ name: '' })
+      await loadContentChannels()
+    } catch (e) { alert('Fehler: ' + e.message) }
+  }
+
+  const handleDeleteChannel = async (id) => {
+    if (!confirm('Rubrik löschen? Ordner werden nicht gelöscht, nur die Zuordnung entfernt.')) return
+    try {
+      await context.deleteContentChannel(projectId, id)
+      if (selectedChannelId === id) setSelectedChannelId(null)
+      await loadContentChannels()
+      await loadFolders()
+    } catch (e) { alert(e.message) }
+  }
+
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return
     try {
-      await context.createFolder(projectId, { name: newFolderName, parent_id: null, category: 'content' })
+      await context.createFolder(projectId, { name: newFolderName, parent_id: null, category: 'content', channel_id: selectedChannelId || null })
       setNewFolderName('')
       setShowNewFolder(false)
       await loadFolders()
@@ -194,11 +245,66 @@ export default function Content({ projectId, onNavigateToKanban }) {
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
-      {/* Top bar with tabs and task button */}
-      <div className="flex items-center gap-3 mb-4 shrink-0">
+      {/* Top bar with channel selector, tabs, and task button */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 bg-gray-900 rounded-xl border border-gray-800 px-4 py-3 mb-4 shrink-0">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {/* Channel/Rubrik Selector */}
+          <div className="relative flex-1 min-w-0 max-w-xs">
+            <button
+              onClick={() => setShowChannelDropdown(!showChannelDropdown)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white hover:border-gray-600 transition-colors"
+            >
+              <span className="truncate">{selectedChannel ? selectedChannel.name : 'Alle Inhalte'}</span>
+              <svg className="w-3 h-3 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showChannelDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowChannelDropdown(false)} />
+                <div className="absolute top-full left-0 mt-1 w-full bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 py-1 max-h-80 overflow-y-auto">
+                  <button
+                    onClick={() => { setSelectedChannelId(null); setShowChannelDropdown(false); setSelectedFolder(null) }}
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-gray-700 transition-colors ${
+                      !selectedChannelId ? 'bg-gray-700/50 text-emerald-300' : 'text-gray-200'
+                    }`}>
+                    Alle Inhalte
+                  </button>
+                  {contentChannels.map(ch => (
+                    <button key={ch.id}
+                      onClick={() => { setSelectedChannelId(ch.id); setShowChannelDropdown(false); setSelectedFolder(null) }}
+                      className={`w-full flex items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-gray-700 transition-colors ${
+                        selectedChannelId === ch.id ? 'bg-gray-700/50 text-emerald-300' : 'text-gray-200'
+                      }`}>
+                      <span className="truncate">{ch.name}</span>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={(e) => { e.stopPropagation(); setEditingChannel(ch); setChannelForm({ name: ch.name }); setShowChannelForm(true); setShowChannelDropdown(false) }}
+                          className="text-gray-500 hover:text-blue-400 p-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteChannel(ch.id); setShowChannelDropdown(false) }}
+                          className="text-gray-500 hover:text-red-400 p-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                      </div>
+                    </button>
+                  ))}
+                  <div className="border-t border-gray-700 mt-1 pt-1">
+                    <button onClick={() => { setShowChannelDropdown(false); setEditingChannel(null); setChannelForm({ name: '' }); setShowChannelForm(true) }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-emerald-400 hover:bg-gray-700 transition-colors">
+                      <span className="text-lg leading-none">+</span>
+                      <span>Neue Rubrik</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
         <button onClick={() => setShowCreateTask(true)}
           className="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition-colors shrink-0">Task erstellen</button>
-        
+
         <div className="flex bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shrink-0">
           <button onClick={() => setSubView('content')}
             className={`px-4 py-2 text-xs font-medium transition-colors ${subView === 'content' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'}`}>
@@ -210,6 +316,23 @@ export default function Content({ projectId, onNavigateToKanban }) {
           </button>
         </div>
       </div>
+
+      {/* Channel Create/Edit Modal */}
+      {showChannelForm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowChannelForm(false)}>
+          <div className="bg-gray-900 rounded-xl border border-gray-700 p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-4">{editingChannel ? 'Rubrik bearbeiten' : 'Neue Rubrik'}</h3>
+            <input value={channelForm.name} onChange={e => setChannelForm({ ...channelForm, name: e.target.value })} placeholder="Name der Rubrik"
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500 mb-4"
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveChannel() }}
+              autoFocus />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowChannelForm(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Abbrechen</button>
+              <button onClick={handleSaveChannel} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Speichern</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {subView === 'profile' ? (
         /* Profile Editor */
@@ -335,7 +458,7 @@ export default function Content({ projectId, onNavigateToKanban }) {
                     <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Dateien durchsuchen..."
                       className="flex-1 md:w-64 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
                     <div className="flex gap-2">
-                      <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple accept="image/*,video/*,.pdf,.doc,.docx,.txt,.md,.mp4,.webm,.mov" />
+                      <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple />
                       <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
                         className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
                         {uploading ? 'Upload...' : 'Upload'}

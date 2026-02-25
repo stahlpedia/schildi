@@ -234,7 +234,17 @@ export const media = {
 
 // Context API (project-scoped media, replaces media for project contexts)
 export const context = {
-  folders: (pid, category) => api(`/projects/${pid}/context/folders${category ? '?category=' + category : ''}`),
+  contentChannels: (pid) => api(`/projects/${pid}/context/content-channels`),
+  createContentChannel: (pid, data) => api(`/projects/${pid}/context/content-channels`, { method: 'POST', body: JSON.stringify(data) }),
+  updateContentChannel: (pid, id, data) => api(`/projects/${pid}/context/content-channels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteContentChannel: (pid, id) => api(`/projects/${pid}/context/content-channels/${id}`, { method: 'DELETE' }),
+  folders: (pid, category, channelId) => {
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (channelId) params.set('channel_id', channelId);
+    const qs = params.toString();
+    return api(`/projects/${pid}/context/folders${qs ? '?' + qs : ''}`);
+  },
   createFolder: (pid, data) => api(`/projects/${pid}/context/folders`, { method: 'POST', body: JSON.stringify(data) }),
   updateFolder: (pid, id, data) => api(`/projects/${pid}/context/folders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteFolder: (pid, id, confirm = false) => api(`/projects/${pid}/context/folders/${id}?confirm=${confirm}`, { method: 'DELETE' }),

@@ -617,6 +617,27 @@ try {
   db.prepare("UPDATE context_folders SET category = 'content' WHERE name = 'Generiert'").run();
 }
 
+// --- Migration: content_channels table ---
+try {
+  db.prepare("SELECT id FROM content_channels LIMIT 1").get();
+} catch {
+  db.exec(`CREATE TABLE IF NOT EXISTS content_channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    position INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+  )`);
+}
+
+// --- Migration: channel_id on context_folders ---
+try {
+  db.prepare("SELECT channel_id FROM context_folders LIMIT 1").get();
+} catch {
+  db.exec("ALTER TABLE context_folders ADD COLUMN channel_id INTEGER");
+}
+
 // Enable foreign keys after all migrations are done
 db.pragma('foreign_keys = ON');
 

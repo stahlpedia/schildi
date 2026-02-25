@@ -16,16 +16,43 @@ const upload = multer({
   dest: path.join(mediaDir, 'tmp'),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowedMimes = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-      'application/pdf', 'text/plain', 'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/mp4',
-      'video/mp4', 'video/webm',
-      'text/markdown'
-    ];
-    cb(null, allowedMimes.includes(file.mimetype));
+    // All file types allowed
+    cb(null, true);
   }
+});
+
+// ============================================================
+// Context Folders (project-scoped, replaces media_folders)
+// ============================================================
+// Content Channels (project-scoped)
+// ============================================================
+
+router.get('/content-channels', (req, res) => {
+  const projectId = req.params.projectId;
+  const channels = db.prepare('SELECT * FROM content_channels WHERE project_id = ? ORDER BY position ASC, id ASC').all(projectId);
+  res.json(channels);
+});
+
+router.post('/content-channels', (req, res) => {
+  const projectId = req.params.projectId;
+  const { name, position = 0 } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Name erforderlich' });
+  const result = db.prepare('INSERT INTO content_channels (project_id, name, position) VALUES (?, ?, ?)').run(projectId, name.trim(), position);
+  res.status(201).json(db.prepare('SELECT * FROM content_channels WHERE id = ?').get(result.lastInsertRowid));
+});
+
+router.put('/content-channels/:id', (req, res) => {
+  const ch = db.prepare('SELECT * FROM content_channels WHERE id = ?').get(req.params.id);
+  if (!ch) return res.status(404).json({ error: 'Nicht gefunden' });
+  const { name, position } = req.body;
+  db.prepare('UPDATE content_channels SET name=?, position=? WHERE id=?').run(name?.trim() || ch.name, position ?? ch.position, ch.id);
+  res.json(db.prepare('SELECT * FROM content_channels WHERE id = ?').get(ch.id));
+});
+
+router.delete('/content-channels/:id', (req, res) => {
+  db.prepare('UPDATE context_folders SET channel_id = NULL WHERE channel_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM content_channels WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
 });
 
 // ============================================================
@@ -35,11 +62,12 @@ const upload = multer({
 router.get('/folders', (req, res) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: 'projectId required' });
-  const { category } = req.query;
+  const { category, channel_id } = req.query;
   let sql = `SELECT f.*, (SELECT COUNT(*) FROM media_files WHERE folder_id = f.id) as file_count
     FROM context_folders f WHERE f.project_id = ?`;
   const params = [projectId];
   if (category) { sql += ' AND f.category = ?'; params.push(category); }
+  if (channel_id) { sql += ' AND f.channel_id = ?'; params.push(channel_id); }
   sql += ' ORDER BY is_system DESC, position ASC, name ASC';
   const folders = db.prepare(sql).all(...params);
   res.json(folders);
@@ -48,10 +76,10 @@ router.get('/folders', (req, res) => {
 router.post('/folders', (req, res) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: 'projectId required' });
-  const { name, type = 'custom', parent_id, category = 'content' } = req.body;
+  const { name, type = 'custom', parent_id, category = 'content', channel_id } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Name erforderlich' });
-  const result = db.prepare('INSERT INTO context_folders (project_id, name, type, parent_id, category) VALUES (?, ?, ?, ?, ?)')
-    .run(projectId, name.trim(), type, parent_id || null, category);
+  const result = db.prepare('INSERT INTO context_folders (project_id, name, type, parent_id, category, channel_id) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(projectId, name.trim(), type, parent_id || null, category, channel_id || null);
   res.status(201).json(db.prepare('SELECT * FROM context_folders WHERE id = ?').get(result.lastInsertRowid));
 });
 
