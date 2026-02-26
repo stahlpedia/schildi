@@ -276,11 +276,11 @@ function columnExists(table, col) {
 }
 
 // --- Ensure a default project exists ---
-let defaultProject = db.prepare("SELECT * FROM projects WHERE slug = 'schildi-dashboard'").get();
+let defaultProject = db.prepare("SELECT * FROM projects ORDER BY id ASC LIMIT 1").get();
 if (!defaultProject) {
   db.prepare("INSERT INTO projects (name, slug, description, color) VALUES (?, ?, ?, ?)")
-    .run('Schildi Dashboard', 'schildi-dashboard', 'Standard-Projekt', '#6366f1');
-  defaultProject = db.prepare("SELECT * FROM projects WHERE slug = 'schildi-dashboard'").get();
+    .run('Mein Projekt', 'mein-projekt', 'Standard-Projekt', '#6366f1');
+  defaultProject = db.prepare("SELECT * FROM projects ORDER BY id ASC LIMIT 1").get();
 }
 const DEFAULT_PROJECT_ID = defaultProject.id;
 
