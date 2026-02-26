@@ -24,6 +24,9 @@ RUN cd client && npx vite build
 # Copy server
 COPY server/ ./server/
 
+# Copy docs (includes OpenClaw skill for auto-sync)
+COPY docs/ ./docs/
+
 EXPOSE 3333
 ENV NODE_ENV=production
 CMD ["node", "server/index.js"]
