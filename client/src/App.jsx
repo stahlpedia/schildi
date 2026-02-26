@@ -7,9 +7,7 @@ import Channel from './components/Channel'
 import Pages from './components/Pages'
 import Context from './components/Context'
 import Content from './components/Content'
-import Skills from './components/Skills'
-
-const TABS = ['Kanban', 'Content', 'Webapps', 'Channels', 'Skills', 'Kontext', 'Admin']
+const TABS = ['Kanban', 'Content', 'Webapps', 'Channels', 'Kontext', 'Admin']
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn())
@@ -280,8 +278,7 @@ export default function App() {
         <div style={{ display: tab === 'Content' ? 'block' : 'none' }}><Content projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
         <div style={{ display: tab === 'Webapps' ? 'block' : 'none' }}><Pages projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
         <div style={{ display: tab === 'Channels' ? 'block' : 'none' }}><Channel projectId={projectId} /></div>
-        <div style={{ display: tab === 'Skills' ? 'block' : 'none' }}><Skills projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
-        <div style={{ display: tab === 'Kontext' ? 'block' : 'none' }}><Context projectId={projectId} /></div>
+        <div style={{ display: tab === 'Kontext' ? 'block' : 'none' }}><Context projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
         <div style={{ display: tab === 'Admin' ? 'block' : 'none' }}><Admin onLogout={() => { logout(); setLoggedIn(false) }} /></div>
       </main>
 

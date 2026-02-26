@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import MemoryViewer from './MemoryViewer'
 import { admin } from '../api'
 
 const ADMIN_SECTIONS = [
   { id: 'profile', label: 'Profil', icon: '👤' },
   { id: 'appearance', label: 'Erscheinungsbild', icon: '🎨' },
-  { id: 'memory', label: 'Memory', icon: '🧠' },
   { id: 'system', label: 'System', icon: '⚙️' },
   { id: 'backup', label: 'Backup', icon: '💾' },
   { id: 'logout', label: 'Logout', icon: '🚪' }
@@ -349,14 +347,6 @@ export default function Admin({ onLogout }) {
                 </label>
               </div>
             </div>
-          </div>
-        )
-
-      case 'memory':
-        return (
-          <div>
-            <h2 className="text-xl font-bold text-gray-100 mb-6">Memory</h2>
-            <MemoryViewer />
           </div>
         )
 
