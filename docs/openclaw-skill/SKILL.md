@@ -172,12 +172,4 @@ Channels werden im Dashboard unter "Channels" verwaltet. Jeder Channel hat eine 
 - **Dockerfile:** `node:22-slim` (nicht Alpine, wegen glibc-Abhängigkeiten)
 - **Upload `folderId`:** Akzeptiert sowohl `folderId` (camelCase) als auch `folder_id` (snake_case)
 
-## Skill teilen
 
-Diesen Skill in andere OpenClaw-Instanzen bringen:
-
-1. **Per Chat:** Dateiinhalt im Slack/Chat senden, KI speichert als `skills/schildi-dashboard/SKILL.md`
-2. **Per Git:** Skill-Ordner ins Repo pushen, auf anderem OpenClaw clonen
-3. **Per Download:** Datei auf den Server kopieren nach `workspace/skills/schildi-dashboard/SKILL.md`
-
-Die KI erkennt den Skill automatisch, wenn er in `skills/*/SKILL.md` liegt und eine passende Beschreibung hat.
