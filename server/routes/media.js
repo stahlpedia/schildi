@@ -135,12 +135,13 @@ router.post('/upload', upload.single('file'), (req, res) => {
   const projectId = req.params.projectId;
   if (!projectId) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'projectId required' }); }
 
-  const { folderId, tags = '[]' } = req.body;
+  const { folderId, folder_id, tags = '[]' } = req.body;
+  // Accept both camelCase and snake_case for consistency
   let parsedTags;
   try { parsedTags = JSON.parse(tags); } catch { parsedTags = []; }
 
   // Use first context folder if no folderId given
-  let targetFolderId = folderId;
+  let targetFolderId = folderId || folder_id;
   if (!targetFolderId) {
     const defaultFolder = db.prepare('SELECT id FROM context_folders WHERE project_id = ? ORDER BY id ASC LIMIT 1').get(projectId);
     targetFolderId = defaultFolder ? defaultFolder.id : null;
