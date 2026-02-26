@@ -31,6 +31,13 @@ export default function Content({ projectId, onNavigateToKanban }) {
   const [fileEditTags, setFileEditTags] = useState('')
   const [fileEditAltText, setFileEditAltText] = useState('')
 
+  // Text file editor state
+  const [fileContent, setFileContent] = useState('')
+  const [fileContentOriginal, setFileContentOriginal] = useState('')
+  const [isEditingContent, setIsEditingContent] = useState(false)
+  const [loadingContent, setLoadingContent] = useState(false)
+  const [savingContent, setSavingContent] = useState(false)
+
   const fileInputRef = useRef(null)
 
   // Task creation
@@ -165,11 +172,36 @@ export default function Content({ projectId, onNavigateToKanban }) {
     finally { setUploading(false); fileInputRef.current.value = '' }
   }
 
-  const handleFileClick = (file) => {
+  const handleFileClick = async (file) => {
     setSelectedFile(file)
     setShowFileModal(true)
     setFileEditTags(JSON.parse(file.tags || '[]').join(', '))
     setFileEditAltText(file.alt_text || '')
+    setFileContent('')
+    setFileContentOriginal('')
+    setIsEditingContent(false)
+
+    if (isTextFile(file.filename)) {
+      setLoadingContent(true)
+      try {
+        const data = await context.fileContent(file.id)
+        setFileContent(data.content)
+        setFileContentOriginal(data.content)
+      } catch (e) { console.error('Fehler beim Laden des Dateiinhalts:', e) }
+      finally { setLoadingContent(false) }
+    }
+  }
+
+  const handleSaveContent = async () => {
+    if (!selectedFile) return
+    setSavingContent(true)
+    try {
+      await context.saveFileContent(selectedFile.id, fileContent)
+      setFileContentOriginal(fileContent)
+      setIsEditingContent(false)
+      await loadFiles()
+    } catch (e) { alert('Fehler beim Speichern: ' + e.message) }
+    finally { setSavingContent(false) }
   }
 
   const handleEditFile = (file) => {
@@ -211,6 +243,8 @@ export default function Content({ projectId, onNavigateToKanban }) {
   const isImage = (mimetype) => mimetype?.startsWith('image/')
   const isVideo = (mimetype) => mimetype?.startsWith('video/')
   const isAudio = (mimetype) => mimetype?.startsWith('audio/')
+  const TEXT_EXTENSIONS = new Set(['md', 'txt', 'json', 'yml', 'yaml', 'css', 'html', 'htm', 'js', 'jsx', 'ts', 'tsx', 'xml', 'csv', 'svg', 'toml', 'ini', 'cfg', 'sh', 'bash', 'py', 'rb', 'php', 'sql', 'env', 'log'])
+  const isTextFile = (filename) => { const ext = (filename || '').split('.').pop().toLowerCase(); return TEXT_EXTENSIONS.has(ext) }
   const serveUrl = (id) => context.serve(id)
 
   if (!projectId) return <div className="text-gray-500 text-center py-20">Bitte wähle ein Projekt aus.</div>
@@ -471,6 +505,37 @@ export default function Content({ projectId, onNavigateToKanban }) {
                     <div className="text-center p-8">
                       <div className="text-6xl mb-4">🎵</div>
                       <audio src={serveUrl(selectedFile.id)} controls className="w-full max-w-md" />
+                    </div>
+                  ) : isTextFile(selectedFile.filename) ? (
+                    <div className="w-full h-full flex flex-col">
+                      {loadingContent ? (
+                        <div className="flex-1 flex items-center justify-center text-gray-500">Lade Inhalt...</div>
+                      ) : isEditingContent ? (
+                        <textarea
+                          value={fileContent}
+                          onChange={e => setFileContent(e.target.value)}
+                          className="flex-1 w-full p-4 bg-gray-800 text-gray-200 text-sm font-mono resize-none focus:outline-none"
+                          spellCheck={false}
+                        />
+                      ) : (
+                        <pre className="flex-1 w-full p-4 bg-gray-800 text-gray-200 text-sm font-mono overflow-auto whitespace-pre-wrap">{fileContent}</pre>
+                      )}
+                      <div className="flex items-center gap-2 p-3 border-t border-gray-700 bg-gray-850">
+                        {isEditingContent ? (
+                          <>
+                            <button onClick={handleSaveContent} disabled={savingContent}
+                              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded text-sm font-medium transition-colors">
+                              {savingContent ? 'Speichern...' : 'Speichern'}
+                            </button>
+                            <button onClick={() => { setFileContent(fileContentOriginal); setIsEditingContent(false) }}
+                              className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors">Abbrechen</button>
+                            {fileContent !== fileContentOriginal && <span className="text-xs text-yellow-400 ml-2">Ungespeicherte Änderungen</span>}
+                          </>
+                        ) : (
+                          <button onClick={() => setIsEditingContent(true)}
+                            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium transition-colors">Bearbeiten</button>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="text-center">

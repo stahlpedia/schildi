@@ -269,6 +269,8 @@ export const context = {
   updateFile: (pid, id, data) => api(`/projects/${pid}/context/files/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteFile: (pid, id) => api(`/projects/${pid}/context/files/${id}`, { method: 'DELETE' }),
   serve: (id) => `${BASE}/media/file/${id}`,
+  fileContent: (id) => api(`/media/files/${id}/content`),
+  saveFileContent: (id, content) => api(`/media/files/${id}/content`, { method: 'PUT', body: JSON.stringify({ content }) }),
 };
 
 // Templates API (project-scoped)

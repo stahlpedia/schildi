@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { ensureDefaultUser, login } = require('./auth');
+const { ensureDefaultUser, login, authenticate } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3333;
@@ -44,6 +44,33 @@ app.get('/api/media/files/:id/serve', (req, res) => {
   res.setHeader('Content-Length', file.size);
   res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
   fs.createReadStream(resolvedPath).pipe(res);
+});
+
+// Text file content (read/write for .md, .txt, .json, .yml, .yaml, .css, .html, .js etc.)
+const TEXT_EXTENSIONS = new Set(['md', 'txt', 'json', 'yml', 'yaml', 'css', 'html', 'htm', 'js', 'jsx', 'ts', 'tsx', 'xml', 'csv', 'svg', 'toml', 'ini', 'cfg', 'sh', 'bash', 'py', 'rb', 'php', 'sql', 'env', 'log']);
+const isTextFile = (filename) => { const ext = (filename || '').split('.').pop().toLowerCase(); return TEXT_EXTENSIONS.has(ext); };
+
+app.get('/api/media/files/:id/content', (req, res) => {
+  const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
+  if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
+  if (!isTextFile(file.filename)) return res.status(400).json({ error: 'Keine Textdatei' });
+  const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..'), file.filepath);
+  if (!fs.existsSync(resolvedPath)) return res.status(404).json({ error: 'Physische Datei nicht gefunden' });
+  const content = fs.readFileSync(resolvedPath, 'utf-8');
+  res.json({ content, filename: file.filename });
+});
+
+app.put('/api/media/files/:id/content', authenticate, (req, res) => {
+  const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
+  if (!file) return res.status(404).json({ error: 'Datei nicht gefunden' });
+  if (!isTextFile(file.filename)) return res.status(400).json({ error: 'Keine Textdatei' });
+  const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..'), file.filepath);
+  const { content } = req.body;
+  if (typeof content !== 'string') return res.status(400).json({ error: 'content (string) required' });
+  fs.writeFileSync(resolvedPath, content, 'utf-8');
+  const newSize = Buffer.byteLength(content, 'utf-8');
+  db.prepare('UPDATE media_files SET size = ?, updated_at = datetime(\'now\') WHERE id = ?').run(newSize, file.id);
+  res.json({ ok: true, size: newSize });
 });
 
 // API Routes
