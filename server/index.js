@@ -71,6 +71,14 @@ const mediaRouter = require('./routes/media');
 app.use('/api/projects/:projectId/context', mediaRouter);
 app.use('/api/media', mediaRouter);
 
+// Content Profiles: /api/projects/:projectId/content-profiles
+app.use('/api/projects/:projectId/content-profiles', require('./routes/content-profiles'));
+
+// Context Textfiles: /api/projects/:projectId/context/folders/:folderId/textfiles
+app.use('/api/projects/:projectId/context/folders/:folderId/textfiles', require('./routes/context-textfiles'));
+// Also mount for direct textfile access by id
+app.use('/api/projects/:projectId/context/textfiles', require('./routes/context-textfiles'));
+
 // Pages: /api/projects/:projectId/pages/*
 const pagesRouter = require('./routes/pages');
 app.use('/api/projects/:projectId/pages', pagesRouter);

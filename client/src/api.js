@@ -303,3 +303,21 @@ export const social = {
   profile: (pid) => api(`/projects/${pid}/social/profile`),
   updateProfile: (pid, data) => api(`/projects/${pid}/social/profile`, { method: 'PUT', body: JSON.stringify(data) }),
 };
+
+// Content Profiles API (project-scoped)
+export const contentProfiles = {
+  list: (pid) => api(`/projects/${pid}/content-profiles`),
+  get: (pid, id) => api(`/projects/${pid}/content-profiles/${id}`),
+  create: (pid, data) => api(`/projects/${pid}/content-profiles`, { method: 'POST', body: JSON.stringify(data) }),
+  update: (pid, id, data) => api(`/projects/${pid}/content-profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (pid, id) => api(`/projects/${pid}/content-profiles/${id}`, { method: 'DELETE' }),
+};
+
+// Context Textfiles API (project-scoped)
+export const textfiles = {
+  list: (pid, folderId) => api(`/projects/${pid}/context/folders/${folderId}/textfiles`),
+  get: (pid, id) => api(`/projects/${pid}/context/textfiles/${id}`),
+  create: (pid, folderId, data) => api(`/projects/${pid}/context/folders/${folderId}/textfiles`, { method: 'POST', body: JSON.stringify(data) }),
+  update: (pid, id, data) => api(`/projects/${pid}/context/textfiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (pid, id) => api(`/projects/${pid}/context/textfiles/${id}`, { method: 'DELETE' }),
+};

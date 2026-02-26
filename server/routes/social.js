@@ -47,9 +47,9 @@ router.put('/profile', (req, res) => {
     };
     const existing = db.prepare('SELECT key FROM settings WHERE key = ?').get(key);
     if (existing) {
-      db.prepare('UPDATE settings SET value = ?, updated_at = datetime("now") WHERE key = ?').run(JSON.stringify(profile), key);
+      db.prepare("UPDATE settings SET value = ?, updated_at = datetime('now') WHERE key = ?").run(JSON.stringify(profile), key);
     } else {
-      db.prepare('INSERT INTO settings (key, value, created_at, updated_at) VALUES (?, ?, datetime("now"), datetime("now"))').run(key, JSON.stringify(profile));
+      db.prepare("INSERT INTO settings (key, value, created_at, updated_at) VALUES (?, ?, datetime('now'), datetime('now'))").run(key, JSON.stringify(profile));
     }
     res.json(profile);
   } catch (error) {

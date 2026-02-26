@@ -638,6 +638,44 @@ try {
   db.exec("ALTER TABLE context_folders ADD COLUMN channel_id INTEGER");
 }
 
+// --- Migration: content_profiles table ---
+try {
+  db.prepare("SELECT id FROM content_profiles LIMIT 1").get();
+} catch {
+  db.exec(`CREATE TABLE content_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    name TEXT NOT NULL DEFAULT 'Standard',
+    topics TEXT DEFAULT '[]',
+    target_audience TEXT DEFAULT '',
+    tone TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+  )`);
+}
+
+// --- Migration: context_textfiles table ---
+try {
+  db.prepare("SELECT id FROM context_textfiles LIMIT 1").get();
+} catch {
+  db.exec(`CREATE TABLE context_textfiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    folder_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    content TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id),
+    FOREIGN KEY (folder_id) REFERENCES context_folders(id)
+  )`);
+}
+
+// --- Migration: Move "Persönlicher Stock" from context to content ---
+db.prepare("UPDATE context_folders SET category = 'content' WHERE name = 'Persönlicher Stock' AND category = 'context'").run();
+
 // Enable foreign keys after all migrations are done
 db.pragma('foreign_keys = ON');
 

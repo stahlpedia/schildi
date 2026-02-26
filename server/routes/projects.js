@@ -44,7 +44,7 @@ router.post('/', (req, res) => {
   db.prepare("INSERT INTO context_folders (project_id, name, type, is_system, category) VALUES (?, ?, ?, ?, ?)")
     .run(projectId, 'Generiert', 'system', 1, 'content');
   db.prepare("INSERT INTO context_folders (project_id, name, type, is_system, category) VALUES (?, ?, ?, ?, ?)")
-    .run(projectId, 'Persönlicher Stock', 'system', 1, 'context');
+    .run(projectId, 'Persönlicher Stock', 'system', 1, 'content');
 
   // Create default chat channel
   db.prepare("INSERT INTO chat_channels (project_id, name, slug, type, is_default) VALUES (?, ?, ?, ?, ?)")

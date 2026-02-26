@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { context, social } from '../api'
+import { context } from '../api'
 import CardModal from './CardModal'
 
 export default function Content({ projectId, onNavigateToKanban }) {
-  const [subView, setSubView] = useState('content')
-
   // Channel state
   const [channels, setChannels] = useState([])
   const [selectedChannelId, setSelectedChannelId] = useState(null)
@@ -35,9 +33,6 @@ export default function Content({ projectId, onNavigateToKanban }) {
 
   const fileInputRef = useRef(null)
 
-  // Profile state
-  const [profileForm, setProfileForm] = useState({ topics: '', target_audience: '', tone: '', notes: '' })
-
   // Task creation
   const [showCreateTask, setShowCreateTask] = useState(false)
 
@@ -47,7 +42,6 @@ export default function Content({ projectId, onNavigateToKanban }) {
     if (projectId) {
       setLoading(true)
       loadChannels()
-      loadProfile()
     }
   }, [projectId])
 
@@ -95,20 +89,6 @@ export default function Content({ projectId, onNavigateToKanban }) {
       setFiles(fileList)
     } catch (error) {
       console.error('Fehler beim Laden der Dateien:', error)
-    }
-  }
-
-  const loadProfile = async () => {
-    try {
-      const p = await social.profile(projectId)
-      setProfileForm({
-        topics: Array.isArray(p.topics) ? p.topics.join(', ') : (p.topics || ''),
-        target_audience: p.targetAudience || p.target_audience || '',
-        tone: p.tone || '',
-        notes: p.notes || ''
-      })
-    } catch {
-      setProfileForm({ topics: '', target_audience: '', tone: '', notes: '' })
     }
   }
 
@@ -222,18 +202,6 @@ export default function Content({ projectId, onNavigateToKanban }) {
     } catch (error) { alert('Fehler: ' + error.message) }
   }
 
-  const handleSaveProfile = async () => {
-    try {
-      await social.updateProfile(projectId, {
-        topics: profileForm.topics.split(',').map(t => t.trim()).filter(Boolean),
-        targetAudience: profileForm.target_audience,
-        tone: profileForm.tone,
-        notes: profileForm.notes
-      })
-      alert('Content-Profil gespeichert!')
-    } catch (e) { alert(e.message) }
-  }
-
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 B'
     const k = 1024, sizes = ['B', 'KB', 'MB', 'GB']
@@ -252,7 +220,7 @@ export default function Content({ projectId, onNavigateToKanban }) {
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
-      {/* Top bar: Channel selector + tabs + task button */}
+      {/* Top bar: Channel selector + task button */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 bg-gray-900 rounded-xl border border-gray-800 px-4 py-3 mb-4 shrink-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Channel Selector */}
@@ -304,18 +272,6 @@ export default function Content({ projectId, onNavigateToKanban }) {
 
         <button onClick={() => setShowCreateTask(true)}
           className="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition-colors shrink-0">Task erstellen</button>
-
-        {/* Sub-view tabs */}
-        <div className="flex bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shrink-0">
-          <button onClick={() => setSubView('content')}
-            className={`px-4 py-2 text-xs font-medium transition-colors ${subView === 'content' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'}`}>
-            Content
-          </button>
-          <button onClick={() => setSubView('profile')}
-            className={`px-4 py-2 text-xs font-medium transition-colors ${subView === 'profile' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'}`}>
-            Content-Profil
-          </button>
-        </div>
       </div>
 
       {/* Channel Form Modal */}
@@ -337,292 +293,260 @@ export default function Content({ projectId, onNavigateToKanban }) {
         </div>
       )}
 
-      {subView === 'profile' ? (
-        /* Profile Editor */
-        <div className="flex-1 bg-gray-900 rounded-xl border border-gray-800 p-4 md:p-6 overflow-y-auto">
-          <h3 className="text-lg font-bold mb-4 text-white">Content-Profil</h3>
-          <p className="text-sm text-gray-400 mb-6">Beschreibt Themen, Zielgruppe und Tonalität deines Contents. Wird von der KI als Kontext genutzt.</p>
-          <div className="space-y-4 max-w-2xl">
-            <div>
-              <label className="text-xs text-gray-400 block mb-1">Themen (kommagetrennt)</label>
-              <input value={profileForm.topics} onChange={e => setProfileForm({ ...profileForm, topics: e.target.value })} placeholder="AI Leadership, Changemanagement, ..."
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 block mb-1">Zielgruppe</label>
-              <textarea value={profileForm.target_audience} onChange={e => setProfileForm({ ...profileForm, target_audience: e.target.value })} rows={2}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 block mb-1">Tonalität</label>
-              <input value={profileForm.tone} onChange={e => setProfileForm({ ...profileForm, tone: e.target.value })} placeholder="Professionell, Locker, ..."
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 block mb-1">Notizen</label>
-              <textarea value={profileForm.notes} onChange={e => setProfileForm({ ...profileForm, notes: e.target.value })} rows={3}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" />
-            </div>
-            <button onClick={handleSaveProfile}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors">Speichern</button>
-          </div>
-        </div>
-      ) : (
-        /* File Browser */
-        <div className="flex gap-4 relative flex-1 min-h-0">
-          {/* Desktop Sidebar */}
-          <div className="hidden md:flex w-80 shrink-0 bg-gray-900 rounded-xl border border-gray-800 flex-col overflow-hidden">
-            <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-300">Ordner</h3>
-              <button onClick={() => setShowNewFolder(true)}
-                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium transition-colors">+ Ordner</button>
-            </div>
-
-            {showNewFolder && (
-              <div className="p-3 border-b border-gray-800 flex gap-2">
-                <input value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="Ordner-Name"
-                  className="flex-1 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white focus:outline-none focus:border-emerald-500"
-                  onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setShowNewFolder(false) }} autoFocus />
-                <button onClick={handleCreateFolder} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs">OK</button>
-              </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto">
-              {folders.map(folder => (
-                <div key={folder.id} onClick={() => setSelectedFolder(folder.id)}
-                  className={`px-4 py-3 cursor-pointer border-b border-gray-800/50 flex items-center gap-3 hover:bg-gray-800/50 transition-colors group ${selectedFolder === folder.id ? 'bg-gray-800' : ''}`}>
-                  <span className="text-lg">{folder.is_system ? '🔒' : '📁'}</span>
-                  <div className="flex-1 min-w-0">
-                    {editingFolder === folder.id ? (
-                      <input value={editFolderName} onChange={e => setEditFolderName(e.target.value)}
-                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500"
-                        onKeyDown={e => { if (e.key === 'Enter') handleSaveFolderEdit(); if (e.key === 'Escape') setEditingFolder(null) }}
-                        onBlur={handleSaveFolderEdit} autoFocus onClick={e => e.stopPropagation()} />
-                    ) : (
-                      <>
-                        <div className="text-sm text-white truncate">{folder.name}</div>
-                        <div className="text-xs text-gray-500">{folder.file_count} Dateien</div>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {!folder.is_system && (
-                      <>
-                        <button onClick={(e) => { e.stopPropagation(); handleEditFolder(folder) }} className="text-gray-400 hover:text-blue-400 text-xs px-1">✏️</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder) }} className="text-gray-400 hover:text-red-400 text-xs px-1">🗑️</button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+      {/* File Browser */}
+      <div className="flex gap-4 relative flex-1 min-h-0">
+        {/* Desktop Sidebar */}
+        <div className="hidden md:flex w-80 shrink-0 bg-gray-900 rounded-xl border border-gray-800 flex-col overflow-hidden">
+          <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-300">Ordner</h3>
+            <button onClick={() => setShowNewFolder(true)}
+              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium transition-colors">+ Ordner</button>
           </div>
 
-          {/* Mobile Sidebar Toggle */}
-          <button onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="md:hidden fixed top-20 left-4 z-40 p-2 bg-gray-900 border border-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-
-          {sidebarOpen && (
-            <div className="fixed inset-0 bg-black/60 z-50 md:hidden" onClick={() => setSidebarOpen(false)}>
-              <div className="absolute top-0 left-0 w-80 max-w-[90vw] h-full bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-300">Ordner</h3>
-                  <button onClick={() => setSidebarOpen(false)} className="text-gray-400 hover:text-white">✕</button>
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                  {folders.map(folder => (
-                    <div key={folder.id} onClick={() => { setSelectedFolder(folder.id); setSidebarOpen(false) }}
-                      className={`px-4 py-3 cursor-pointer border-b border-gray-800/50 flex items-center gap-3 hover:bg-gray-800/50 transition-colors ${selectedFolder === folder.id ? 'bg-gray-800' : ''}`}>
-                      <span className="text-lg">{folder.is_system ? '🔒' : '📁'}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-white truncate">{folder.name}</div>
-                        <div className="text-xs text-gray-500">{folder.file_count} Dateien</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {showNewFolder && (
+            <div className="p-3 border-b border-gray-800 flex gap-2">
+              <input value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="Ordner-Name"
+                className="flex-1 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white focus:outline-none focus:border-emerald-500"
+                onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setShowNewFolder(false) }} autoFocus />
+              <button onClick={handleCreateFolder} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs">OK</button>
             </div>
           )}
 
-          {/* Main Content */}
-          <div className="flex-1 bg-gray-900 rounded-xl border border-gray-800 flex flex-col overflow-hidden">
-            {selectedFolder ? (
-              <>
-                <div className="p-4 border-b border-gray-800 flex flex-col md:flex-row gap-3 md:items-center">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-300">{folders.find(f => f.id === selectedFolder)?.name || 'Content'}</h3>
-                  </div>
-                  <div className="flex flex-col md:flex-row gap-3 md:items-center">
-                    <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Dateien durchsuchen..."
-                      className="flex-1 md:w-64 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
-                    <div className="flex gap-2">
-                      <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple />
-                      <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
-                        {uploading ? 'Upload...' : 'Upload'}
-                      </button>
+          <div className="flex-1 overflow-y-auto">
+            {folders.map(folder => (
+              <div key={folder.id} onClick={() => setSelectedFolder(folder.id)}
+                className={`px-4 py-3 cursor-pointer border-b border-gray-800/50 flex items-center gap-3 hover:bg-gray-800/50 transition-colors group ${selectedFolder === folder.id ? 'bg-gray-800' : ''}`}>
+                <span className="text-lg">{folder.is_system ? '🔒' : '📁'}</span>
+                <div className="flex-1 min-w-0">
+                  {editingFolder === folder.id ? (
+                    <input value={editFolderName} onChange={e => setEditFolderName(e.target.value)}
+                      className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500"
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveFolderEdit(); if (e.key === 'Escape') setEditingFolder(null) }}
+                      onBlur={handleSaveFolderEdit} autoFocus onClick={e => e.stopPropagation()} />
+                  ) : (
+                    <>
+                      <div className="text-sm text-white truncate">{folder.name}</div>
+                      <div className="text-xs text-gray-500">{folder.file_count} Dateien</div>
+                    </>
+                  )}
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {!folder.is_system && (
+                    <>
+                      <button onClick={(e) => { e.stopPropagation(); handleEditFolder(folder) }} className="text-gray-400 hover:text-blue-400 text-xs px-1">✏️</button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder) }} className="text-gray-400 hover:text-red-400 text-xs px-1">🗑️</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Mobile Sidebar Toggle */}
+        <button onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="md:hidden fixed top-20 left-4 z-40 p-2 bg-gray-900 border border-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        {sidebarOpen && (
+          <div className="fixed inset-0 bg-black/60 z-50 md:hidden" onClick={() => setSidebarOpen(false)}>
+            <div className="absolute top-0 left-0 w-80 max-w-[90vw] h-full bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-300">Ordner</h3>
+                <button onClick={() => setSidebarOpen(false)} className="text-gray-400 hover:text-white">✕</button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {folders.map(folder => (
+                  <div key={folder.id} onClick={() => { setSelectedFolder(folder.id); setSidebarOpen(false) }}
+                    className={`px-4 py-3 cursor-pointer border-b border-gray-800/50 flex items-center gap-3 hover:bg-gray-800/50 transition-colors ${selectedFolder === folder.id ? 'bg-gray-800' : ''}`}>
+                    <span className="text-lg">{folder.is_system ? '🔒' : '📁'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-white truncate">{folder.name}</div>
+                      <div className="text-xs text-gray-500">{folder.file_count} Dateien</div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content */}
+        <div className="flex-1 bg-gray-900 rounded-xl border border-gray-800 flex flex-col overflow-hidden">
+          {selectedFolder ? (
+            <>
+              <div className="p-4 border-b border-gray-800 flex flex-col md:flex-row gap-3 md:items-center">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-300">{folders.find(f => f.id === selectedFolder)?.name || 'Content'}</h3>
+                </div>
+                <div className="flex flex-col md:flex-row gap-3 md:items-center">
+                  <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Dateien durchsuchen..."
+                    className="flex-1 md:w-64 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
+                  <div className="flex gap-2">
+                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple />
+                    <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+                      {uploading ? 'Upload...' : 'Upload'}
+                    </button>
                   </div>
                 </div>
+              </div>
 
-                <div className="flex-1 overflow-y-auto p-4">
-                  {files.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-                      <div className="text-6xl mb-4">📁</div>
-                      <div className="text-lg">Noch keine Dateien</div>
-                      <p className="text-sm mt-2">Lade Dateien hoch oder lass Content generieren</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {files.map(file => (
-                        <div key={file.id} onClick={() => handleFileClick(file)}
-                          className="group relative bg-gray-800 rounded-lg border border-gray-700 overflow-hidden cursor-pointer hover:border-gray-600 transition-colors">
-                          <div className="aspect-square bg-gray-700 flex items-center justify-center">
-                            {isImage(file.mimetype) ? (
-                              <img src={serveUrl(file.id)} alt={file.alt_text || file.filename} className="w-full h-full object-cover" loading="lazy" />
-                            ) : isVideo(file.mimetype) ? (
-                              <div className="text-center">
-                                <div className="text-3xl">🎬</div>
-                                <div className="text-[10px] text-gray-400 mt-1 px-2 truncate">MP4</div>
-                              </div>
-                            ) : isAudio(file.mimetype) ? (
-                              <div className="text-center">
-                                <div className="text-3xl">🎵</div>
-                                <div className="text-[10px] text-gray-400 mt-1 px-2 truncate">{file.filename?.split('.').pop()?.toUpperCase()}</div>
-                              </div>
-                            ) : (
-                              <div className="text-center">
-                                <div className="text-3xl">📄</div>
-                                <div className="text-[10px] text-gray-400 mt-1 px-2 truncate">{file.filename?.split('.').pop()?.toUpperCase()}</div>
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-2">
-                            <div className="text-xs text-white truncate" title={file.filename}>{file.filename}</div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {formatFileSize(file.size)}
-                              {file.width && file.height && <span> | {file.width}x{file.height}</span>}
+              <div className="flex-1 overflow-y-auto p-4">
+                {files.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                    <div className="text-6xl mb-4">📁</div>
+                    <div className="text-lg">Noch keine Dateien</div>
+                    <p className="text-sm mt-2">Lade Dateien hoch oder lass Content generieren</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {files.map(file => (
+                      <div key={file.id} onClick={() => handleFileClick(file)}
+                        className="group relative bg-gray-800 rounded-lg border border-gray-700 overflow-hidden cursor-pointer hover:border-gray-600 transition-colors">
+                        <div className="aspect-square bg-gray-700 flex items-center justify-center">
+                          {isImage(file.mimetype) ? (
+                            <img src={serveUrl(file.id)} alt={file.alt_text || file.filename} className="w-full h-full object-cover" loading="lazy" />
+                          ) : isVideo(file.mimetype) ? (
+                            <div className="text-center">
+                              <div className="text-3xl">🎬</div>
+                              <div className="text-[10px] text-gray-400 mt-1 px-2 truncate">MP4</div>
                             </div>
-                          </div>
-                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteFile(file) }}
-                              className="p-1 bg-gray-900/80 rounded text-red-400 hover:text-red-300 text-xs">🗑️</button>
+                          ) : isAudio(file.mimetype) ? (
+                            <div className="text-center">
+                              <div className="text-3xl">🎵</div>
+                              <div className="text-[10px] text-gray-400 mt-1 px-2 truncate">{file.filename?.split('.').pop()?.toUpperCase()}</div>
+                            </div>
+                          ) : (
+                            <div className="text-center">
+                              <div className="text-3xl">📄</div>
+                              <div className="text-[10px] text-gray-400 mt-1 px-2 truncate">{file.filename?.split('.').pop()?.toUpperCase()}</div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-2">
+                          <div className="text-xs text-white truncate" title={file.filename}>{file.filename}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {formatFileSize(file.size)}
+                            {file.width && file.height && <span> | {file.width}x{file.height}</span>}
                           </div>
                         </div>
-                      ))}
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={(e) => { e.stopPropagation(); handleDeleteFile(file) }}
+                            className="p-1 bg-gray-900/80 rounded text-red-400 hover:text-red-300 text-xs">🗑️</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <div className="text-6xl mb-4">{channels.length === 0 ? '📱' : '📂'}</div>
+                <div className="text-lg">{channels.length === 0 ? 'Erstelle einen Kanal um loszulegen' : 'Wähle einen Ordner'}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* File Detail Modal */}
+        {showFileModal && selectedFile && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowFileModal(false)}>
+            <div className="bg-gray-900 rounded-xl border border-gray-700 max-w-4xl w-full max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-white">{selectedFile.filename}</h3>
+                <button onClick={() => setShowFileModal(false)} className="text-gray-400 hover:text-white">✕</button>
+              </div>
+              <div className="flex flex-col md:flex-row max-h-[calc(90vh-80px)]">
+                <div className="flex-1 flex items-center justify-center bg-gray-800 min-h-64">
+                  {isImage(selectedFile.mimetype) ? (
+                    <img src={serveUrl(selectedFile.id)} alt={selectedFile.alt_text || selectedFile.filename} className="max-w-full max-h-full object-contain" />
+                  ) : isVideo(selectedFile.mimetype) ? (
+                    <video src={serveUrl(selectedFile.id)} controls className="max-w-full max-h-full" />
+                  ) : isAudio(selectedFile.mimetype) ? (
+                    <div className="text-center p-8">
+                      <div className="text-6xl mb-4">🎵</div>
+                      <audio src={serveUrl(selectedFile.id)} controls className="w-full max-w-md" />
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <div className="text-6xl mb-4">📄</div>
+                      <div className="text-gray-400">{selectedFile.filename}</div>
+                      <div className="text-gray-500 text-sm mt-2">{selectedFile.mimetype}</div>
+                      <div className="text-gray-500 text-sm">{formatFileSize(selectedFile.size)}</div>
                     </div>
                   )}
                 </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-500">
-                <div className="text-center">
-                  <div className="text-6xl mb-4">{channels.length === 0 ? '📱' : '📂'}</div>
-                  <div className="text-lg">{channels.length === 0 ? 'Erstelle einen Kanal um loszulegen' : 'Wähle einen Ordner'}</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* File Detail Modal */}
-          {showFileModal && selectedFile && (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowFileModal(false)}>
-              <div className="bg-gray-900 rounded-xl border border-gray-700 max-w-4xl w-full max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-                <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-white">{selectedFile.filename}</h3>
-                  <button onClick={() => setShowFileModal(false)} className="text-gray-400 hover:text-white">✕</button>
-                </div>
-                <div className="flex flex-col md:flex-row max-h-[calc(90vh-80px)]">
-                  <div className="flex-1 flex items-center justify-center bg-gray-800 min-h-64">
-                    {isImage(selectedFile.mimetype) ? (
-                      <img src={serveUrl(selectedFile.id)} alt={selectedFile.alt_text || selectedFile.filename} className="max-w-full max-h-full object-contain" />
-                    ) : isVideo(selectedFile.mimetype) ? (
-                      <video src={serveUrl(selectedFile.id)} controls className="max-w-full max-h-full" />
-                    ) : isAudio(selectedFile.mimetype) ? (
-                      <div className="text-center p-8">
-                        <div className="text-6xl mb-4">🎵</div>
-                        <audio src={serveUrl(selectedFile.id)} controls className="w-full max-w-md" />
+                <div className="w-full md:w-80 p-4 border-t md:border-t-0 md:border-l border-gray-800 overflow-y-auto">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Dateiname</label>
+                      <div className="text-sm text-white">{selectedFile.filename}</div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Größe</label>
+                      <div className="text-sm text-white">
+                        {formatFileSize(selectedFile.size)}
+                        {selectedFile.width && selectedFile.height && <span className="block text-gray-400">{selectedFile.width} x {selectedFile.height} px</span>}
                       </div>
-                    ) : (
-                      <div className="text-center">
-                        <div className="text-6xl mb-4">📄</div>
-                        <div className="text-gray-400">{selectedFile.filename}</div>
-                        <div className="text-gray-500 text-sm mt-2">{selectedFile.mimetype}</div>
-                        <div className="text-gray-500 text-sm">{formatFileSize(selectedFile.size)}</div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="w-full md:w-80 p-4 border-t md:border-t-0 md:border-l border-gray-800 overflow-y-auto">
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Dateiname</label>
-                        <div className="text-sm text-white">{selectedFile.filename}</div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Größe</label>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Alt-Text</label>
+                      {editingFile === selectedFile.id ? (
+                        <textarea value={fileEditAltText} onChange={e => setFileEditAltText(e.target.value)}
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" rows={3} />
+                      ) : (
+                        <div className="text-sm text-white">{selectedFile.alt_text || 'Kein Alt-Text'}</div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Tags</label>
+                      {editingFile === selectedFile.id ? (
+                        <input value={fileEditTags} onChange={e => setFileEditTags(e.target.value)} placeholder="Tags, durch Komma getrennt"
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
+                      ) : (
                         <div className="text-sm text-white">
-                          {formatFileSize(selectedFile.size)}
-                          {selectedFile.width && selectedFile.height && <span className="block text-gray-400">{selectedFile.width} x {selectedFile.height} px</span>}
+                          {JSON.parse(selectedFile.tags || '[]').length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {JSON.parse(selectedFile.tags).map((tag, idx) => (
+                                <span key={idx} className="px-2 py-1 bg-blue-900/50 text-blue-300 rounded text-xs">{tag}</span>
+                              ))}
+                            </div>
+                          ) : 'Keine Tags'}
                         </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Alt-Text</label>
-                        {editingFile === selectedFile.id ? (
-                          <textarea value={fileEditAltText} onChange={e => setFileEditAltText(e.target.value)}
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" rows={3} />
-                        ) : (
-                          <div className="text-sm text-white">{selectedFile.alt_text || 'Kein Alt-Text'}</div>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Tags</label>
-                        {editingFile === selectedFile.id ? (
-                          <input value={fileEditTags} onChange={e => setFileEditTags(e.target.value)} placeholder="Tags, durch Komma getrennt"
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-emerald-500" />
-                        ) : (
-                          <div className="text-sm text-white">
-                            {JSON.parse(selectedFile.tags || '[]').length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {JSON.parse(selectedFile.tags).map((tag, idx) => (
-                                  <span key={idx} className="px-2 py-1 bg-blue-900/50 text-blue-300 rounded text-xs">{tag}</span>
-                                ))}
-                              </div>
-                            ) : 'Keine Tags'}
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">URL</label>
-                        <input value={serveUrl(selectedFile.id)} readOnly
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-xs text-gray-400 focus:outline-none" onClick={e => e.target.select()} />
-                      </div>
-                      <div className="flex gap-2 pt-4">
-                        {editingFile === selectedFile.id ? (
-                          <>
-                            <button onClick={handleSaveFileEdit} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-medium transition-colors">Speichern</button>
-                            <button onClick={() => setEditingFile(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors">Abbrechen</button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => handleEditFile(selectedFile)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium transition-colors">Bearbeiten</button>
-                            <a href={serveUrl(selectedFile.id)} download={selectedFile.filename}
-                              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium transition-colors">Download</a>
-                          </>
-                        )}
-                      </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">URL</label>
+                      <input value={serveUrl(selectedFile.id)} readOnly
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-xs text-gray-400 focus:outline-none" onClick={e => e.target.select()} />
+                    </div>
+                    <div className="flex gap-2 pt-4">
+                      {editingFile === selectedFile.id ? (
+                        <>
+                          <button onClick={handleSaveFileEdit} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-medium transition-colors">Speichern</button>
+                          <button onClick={() => setEditingFile(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors">Abbrechen</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => handleEditFile(selectedFile)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium transition-colors">Bearbeiten</button>
+                          <a href={serveUrl(selectedFile.id)} download={selectedFile.filename}
+                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium transition-colors">Download</a>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
 
       {/* Create Task Modal */}
       <CardModal
