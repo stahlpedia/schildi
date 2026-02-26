@@ -46,9 +46,34 @@ async function syncSkill() {
     return;
   }
 
-  console.log('[skill-sync] Skill changed, sending update to OpenClaw...');
+  const isFirstSync = !lastHash;
+  console.log(`[skill-sync] Skill ${isFirstSync ? 'first sync' : 'changed'}, sending update to OpenClaw...`);
 
-  const prompt = `Das Schildi Dashboard wurde aktualisiert. Der Dashboard-Skill muss angepasst werden.
+  // Gather dashboard connection info from ENV
+  const dashboardUser = process.env.DASHBOARD_USER || 'admin';
+  const dashboardHost = process.env.DASHBOARD_ID || 'schildi-dashboard';
+  const dashboardPort = process.env.PORT || '3333';
+
+  let prompt;
+
+  if (isFirstSync) {
+    prompt = `Das Schildi Dashboard wurde zum ersten Mal mit diesem OpenClaw verbunden. Bitte richte alles ein:
+
+1. Erstelle die Datei skills/schildi-dashboard/SKILL.md mit folgendem Inhalt:
+
+${skillContent}
+
+2. Trage folgendes in deine TOOLS.md ein (falls nicht bereits vorhanden), unter einer Sektion "## Schildi Dashboard":
+
+- **Host:** ${dashboardHost}:${dashboardPort} (Docker-intern, IMMER intern zugreifen!)
+- **Login:** POST http://${dashboardHost}:${dashboardPort}/api/login
+- **Body:** {"username":"${dashboardUser}","password":"$KANBAN_PW"}
+- **Auth:** Bearer Token aus Login-Response
+- **ENV:** Passwort liegt in Umgebungsvariable $KANBAN_PW
+
+3. Bestätige dem Nutzer im Slack-Chat, dass das Dashboard verbunden wurde und der Skill installiert ist.`;
+  } else {
+    prompt = `Das Schildi Dashboard wurde aktualisiert. Der Dashboard-Skill muss angepasst werden.
 
 Bitte aktualisiere die Datei skills/schildi-dashboard/SKILL.md mit dem folgenden Inhalt.
 Vergleiche vorher kurz, was sich geändert hat, und bestätige die Aktualisierung im Slack-Chat an den Nutzer.
@@ -57,6 +82,7 @@ Fasse die Änderungen in 1-3 Sätzen zusammen.
 Neuer Skill-Inhalt:
 
 ${skillContent}`;
+  }
 
   await sendWithRetry(openclawUrl, openclawToken, prompt, currentHash);
 }
