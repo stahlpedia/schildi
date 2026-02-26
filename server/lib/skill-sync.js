@@ -58,6 +58,12 @@ Neuer Skill-Inhalt:
 
 ${skillContent}`;
 
+  await sendWithRetry(openclawUrl, openclawToken, prompt, currentHash);
+}
+
+async function sendWithRetry(openclawUrl, openclawToken, prompt, hash, attempt = 1, maxAttempts = 5) {
+  const delays = [0, 15000, 30000, 60000, 120000]; // 0s, 15s, 30s, 60s, 120s
+
   try {
     const res = await fetch(`${openclawUrl}/v1/chat/completions`, {
       method: 'POST',
@@ -73,14 +79,24 @@ ${skillContent}`;
     });
 
     if (res.ok) {
-      saveHash(currentHash);
+      saveHash(hash);
       console.log('[skill-sync] Skill update sent successfully');
     } else {
       const text = await res.text();
-      console.error('[skill-sync] OpenClaw responded with', res.status, text.slice(0, 200));
+      console.error(`[skill-sync] OpenClaw responded with ${res.status} (attempt ${attempt}/${maxAttempts})`);
+      if (attempt < maxAttempts) {
+        const delay = delays[attempt] || 60000;
+        console.log(`[skill-sync] Retrying in ${delay / 1000}s...`);
+        setTimeout(() => sendWithRetry(openclawUrl, openclawToken, prompt, hash, attempt + 1, maxAttempts), delay);
+      }
     }
   } catch (err) {
-    console.error('[skill-sync] Failed to send skill update:', err.message);
+    console.error(`[skill-sync] Failed (attempt ${attempt}/${maxAttempts}):`, err.message);
+    if (attempt < maxAttempts) {
+      const delay = delays[attempt] || 60000;
+      console.log(`[skill-sync] Retrying in ${delay / 1000}s...`);
+      setTimeout(() => sendWithRetry(openclawUrl, openclawToken, prompt, hash, attempt + 1, maxAttempts), delay);
+    }
   }
 }
 
