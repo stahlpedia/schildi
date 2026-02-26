@@ -121,6 +121,12 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🐢 Schildi Dashboard läuft auf Port ${PORT}`);
+
+  // Sync OpenClaw skill after startup (delayed to not block boot)
+  setTimeout(() => {
+    const { syncSkill } = require('./lib/skill-sync');
+    syncSkill().catch(err => console.error('[skill-sync] Error:', err.message));
+  }, 5000);
 });
 
 // Graceful shutdown: close Puppeteer browser
