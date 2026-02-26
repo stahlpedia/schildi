@@ -71,8 +71,7 @@ export default function Content({ projectId, onNavigateToKanban }) {
 
   const loadFolders = async () => {
     try {
-      const params = selectedChannelId ? `content&channel_id=${selectedChannelId}` : 'content'
-      const folderList = await context.folders(projectId, params)
+      const folderList = await context.folders(projectId, 'content', selectedChannelId || undefined)
       setFolders(folderList)
       if (folderList.length > 0 && !selectedFolder) setSelectedFolder(folderList[0].id)
     } catch (error) {
