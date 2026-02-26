@@ -67,7 +67,7 @@ router.get('/folders', (req, res) => {
     FROM context_folders f WHERE f.project_id = ?`;
   const params = [projectId];
   if (category) { sql += ' AND f.category = ?'; params.push(category); }
-  if (channel_id) { sql += ' AND f.channel_id = ?'; params.push(channel_id); }
+  if (channel_id) { sql += ' AND (f.channel_id = ? OR f.is_system = 1)'; params.push(channel_id); }
   sql += ' ORDER BY is_system DESC, position ASC, name ASC';
   const folders = db.prepare(sql).all(...params);
   res.json(folders);
