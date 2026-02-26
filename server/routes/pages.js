@@ -90,10 +90,44 @@ async function removeCaddyRoute(domain) {
   try { await fetch(`${CADDY_API}/id/site_${domain}`, { method: 'DELETE' }); } catch (e) { console.error(`[Caddy] Failed to remove ${domain}:`, e.message); }
 }
 
+async function syncCaddyTls() {
+  try {
+    // Collect all domains: website domains + existing TLS subjects
+    const websiteDomains = fs.readdirSync(WEBSITES_DIR, { withFileTypes: true })
+      .filter(e => e.isDirectory()).map(e => e.name);
+    // Read current TLS subjects to preserve non-website domains
+    let existingSubjects = [];
+    try {
+      const res = await fetch(`${CADDY_API}/config/apps/tls/automation/policies/0/subjects`);
+      if (res.ok) existingSubjects = await res.json();
+    } catch (_) {}
+    const allSubjects = [...new Set([...existingSubjects, ...websiteDomains])];
+    if (allSubjects.length === 0) return;
+    // Ensure TLS app exists with policy covering all domains
+    await fetch(`${CADDY_API}/config/apps/tls`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        automation: {
+          policies: [{
+            subjects: allSubjects,
+            issuers: [
+              { module: 'acme', email: 'admin@stahlpedia.de' },
+              { module: 'acme', ca: 'https://acme.zerossl.com/v2/DV90', email: 'admin@stahlpedia.de' }
+            ]
+          }]
+        }
+      })
+    });
+    console.log(`[Caddy] TLS policy synced for ${allSubjects.length} domains`);
+  } catch (e) { console.error('[Caddy] Failed to sync TLS:', e.message); }
+}
+
 async function registerAllCaddyRoutes() {
   try {
     const entries = fs.readdirSync(WEBSITES_DIR, { withFileTypes: true });
     for (const entry of entries) { if (entry.isDirectory()) await registerCaddyRoute(entry.name); }
+    await syncCaddyTls();
   } catch (e) { console.error('[Caddy] Failed to register routes on startup:', e.message); }
 }
 registerAllCaddyRoutes();
@@ -152,6 +186,7 @@ router.post('/domains', async (req, res) => {
 
     fs.mkdirSync(domainDir, { recursive: true });
     await registerCaddyRoute(domainName);
+    await syncCaddyTls();
 
     if (projectId) {
       const result = db.prepare('INSERT INTO pages_domains (project_id, domain) VALUES (?, ?)').run(projectId, domainName);
@@ -169,6 +204,7 @@ router.delete('/domains/:name', async (req, res) => {
   try {
     fs.rmSync(domainDir, { recursive: true, force: true });
     await removeCaddyRoute(name);
+    await syncCaddyTls();
     // Also remove from DB
     const domainRec = db.prepare('SELECT id FROM pages_domains WHERE domain = ?').get(name);
     if (domainRec) {
