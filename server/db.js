@@ -124,6 +124,8 @@ db.exec(`
     parent_id INTEGER,
     is_system INTEGER DEFAULT 0,
     position INTEGER DEFAULT 0,
+    category TEXT DEFAULT 'content',
+    channel_id INTEGER,
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (project_id) REFERENCES projects(id)
   );
