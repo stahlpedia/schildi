@@ -8,8 +8,31 @@ const path = require('path');
 const router = Router({ mergeParams: true });
 router.use(authenticate);
 
+const http = require('http');
 const WEBSITES_DIR = process.env.WEBSITES_DIR || '/var/www/ai-websites';
 const CADDY_API = process.env.CADDY_API || 'http://caddy:2019';
+const ACME_EMAIL = process.env.ACME_EMAIL || 'admin@example.com';
+
+// Use http.request instead of fetch for Caddy API calls.
+// Node's fetch (undici) sends an empty Origin header which Caddy rejects.
+function caddyRequest(method, urlPath, body) {
+  const url = new URL(urlPath, CADDY_API);
+  return new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null;
+    const req = http.request({
+      hostname: url.hostname, port: url.port, path: url.pathname,
+      method, headers: data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {}
+    }, res => {
+      let d = ''; res.on('data', c => d += c);
+      res.on('end', () => {
+        resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, text: () => Promise.resolve(d), json: () => Promise.resolve(d ? JSON.parse(d) : null) });
+      });
+    });
+    req.on('error', reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
 
 fs.mkdirSync(WEBSITES_DIR, { recursive: true });
 
@@ -70,15 +93,11 @@ async function registerCaddyRoute(domain) {
   try {
     // Delete all existing routes with this @id first (Caddy can have duplicates)
     for (let i = 0; i < 20; i++) {
-      const res = await fetch(`${CADDY_API}/id/site_${domain}`, { method: 'DELETE' });
+      const res = await caddyRequest('DELETE', `/id/site_${domain}`);
       if (!res.ok) break;
     }
     // Create fresh
-    await fetch(`${CADDY_API}/config/apps/http/servers/srv0/routes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(route)
-    });
+    await caddyRequest('POST', '/config/apps/http/servers/srv0/routes', route);
   } catch (e) { console.error(`[Caddy] Failed to register ${domain}:`, e.message); }
 }
 
@@ -87,7 +106,7 @@ async function syncCaddyAuth(domain) {
 }
 
 async function removeCaddyRoute(domain) {
-  try { await fetch(`${CADDY_API}/id/site_${domain}`, { method: 'DELETE' }); } catch (e) { console.error(`[Caddy] Failed to remove ${domain}:`, e.message); }
+  try { await caddyRequest('DELETE', `/id/site_${domain}`); } catch (e) { console.error(`[Caddy] Failed to remove ${domain}:`, e.message); }
 }
 
 async function syncCaddyTls() {
@@ -98,26 +117,22 @@ async function syncCaddyTls() {
     // Read current TLS subjects to preserve non-website domains
     let existingSubjects = [];
     try {
-      const res = await fetch(`${CADDY_API}/config/apps/tls/automation/policies/0/subjects`);
+      const res = await caddyRequest('GET', '/config/apps/tls/automation/policies/0/subjects');
       if (res.ok) existingSubjects = await res.json();
     } catch (_) {}
     const allSubjects = [...new Set([...existingSubjects, ...websiteDomains])];
     if (allSubjects.length === 0) return;
     // Ensure TLS app exists with policy covering all domains
-    await fetch(`${CADDY_API}/config/apps/tls`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        automation: {
-          policies: [{
-            subjects: allSubjects,
-            issuers: [
-              { module: 'acme', email: 'admin@stahlpedia.de' },
-              { module: 'acme', ca: 'https://acme.zerossl.com/v2/DV90', email: 'admin@stahlpedia.de' }
-            ]
-          }]
-        }
-      })
+    await caddyRequest('POST', '/config/apps/tls', {
+      automation: {
+        policies: [{
+          subjects: allSubjects,
+          issuers: [
+            { module: 'acme', email: ACME_EMAIL },
+            { module: 'acme', ca: 'https://acme.zerossl.com/v2/DV90', email: ACME_EMAIL }
+          ]
+        }]
+      }
     });
     console.log(`[Caddy] TLS policy synced for ${allSubjects.length} domains`);
   } catch (e) { console.error('[Caddy] Failed to sync TLS:', e.message); }
