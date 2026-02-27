@@ -97,7 +97,13 @@ async function registerCaddyRoute(domain) {
       if (!res.ok) break;
     }
     // Create fresh
-    await caddyRequest('POST', '/config/apps/http/servers/srv0/routes', route);
+    const postRes = await caddyRequest('POST', '/config/apps/http/servers/srv0/routes', route);
+    if (postRes.ok) {
+      console.log(`[Caddy] Registered route for ${domain}`);
+    } else {
+      const errText = await postRes.text();
+      console.error(`[Caddy] Failed to register ${domain}: ${postRes.status} ${errText}`);
+    }
   } catch (e) { console.error(`[Caddy] Failed to register ${domain}:`, e.message); }
 }
 
