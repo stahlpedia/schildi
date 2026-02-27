@@ -74,6 +74,20 @@ router.get('/branding/logo-file', (req, res) => {
   }
 });
 
+// Public branding info (no auth required, used by login screen)
+router.get('/branding/public', (req, res) => {
+  try {
+    const titleRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('branding_title');
+    const logoRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('branding_logo_path');
+    res.json({
+      title: titleRow?.value || 'Schildi Dashboard',
+      logoUrl: logoRow?.value ? '/api/admin/branding/logo-file' : null
+    });
+  } catch {
+    res.json({ title: 'Schildi Dashboard', logoUrl: null });
+  }
+});
+
 // All admin endpoints require authentication
 router.use(authenticate);
 

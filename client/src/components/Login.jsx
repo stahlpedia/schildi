@@ -1,10 +1,18 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { login } from '../api'
 
 export default function Login({ onLogin }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [branding, setBranding] = useState({ title: 'Schildi Dashboard', logoUrl: null })
+
+  useEffect(() => {
+    fetch('/api/admin/branding/public')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setBranding(data) })
+      .catch(() => {})
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -19,8 +27,11 @@ export default function Login({ onLogin }) {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
       <form onSubmit={handleSubmit} className="bg-gray-900 p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-800">
         <div className="text-center mb-6">
-          <span className="text-5xl">🐢</span>
-          <h1 className="text-2xl font-bold text-white mt-2">Schildi Dashboard</h1>
+          {branding.logoUrl
+            ? <img src={branding.logoUrl} alt="Logo" className="h-12 max-w-[200px] object-contain mx-auto" onError={e => { e.target.style.display = 'none' }} />
+            : <span className="text-5xl">🐢</span>
+          }
+          <h1 className="text-2xl font-bold text-white mt-2">{branding.title}</h1>
         </div>
         {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
         <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Benutzername"
