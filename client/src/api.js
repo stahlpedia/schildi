@@ -119,7 +119,7 @@ export const projectPages = {
 };
 
 export const chatChannels = {
-  list: () => api('/channel/chat-channels'),
+  list: (projectId) => api(`/channel/chat-channels${projectId ? `?project_id=${projectId}` : ''}`),
   create: (data) => api('/channel/chat-channels', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => api(`/channel/chat-channels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (id) => api(`/channel/chat-channels/${id}`, { method: 'DELETE' }),

@@ -34,7 +34,7 @@ export default function Channel({ projectId, onUpdate }) {
   const bottomRef = useRef(null)
 
   const loadChannels = async () => {
-    const list = await chatChannels.list()
+    const list = await chatChannels.list(projectId)
     setChannels(list)
     if (list.length > 0 && !selectedChannel) {
       setSelectedChannel(list[0].id)
@@ -57,7 +57,7 @@ export default function Channel({ projectId, onUpdate }) {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }
 
-  useEffect(() => { loadChannels(); loadModels() }, [])
+  useEffect(() => { setSelectedChannel(null); setSelected(null); setMessages([]); loadChannels(); loadModels() }, [projectId])
   useEffect(() => { if (selectedChannel) { setSelected(null); setMessages([]); loadConvos() } }, [selectedChannel])
   useEffect(() => { if (selected) loadMessages(selected) }, [selected])
 
@@ -67,7 +67,7 @@ export default function Channel({ projectId, onUpdate }) {
   const handleCreateChannel = async () => {
     if (!newChName.trim() || !newChModelId) return
     try {
-      const ch = await chatChannels.create({ name: newChName, type: 'model', model_id: newChModelId })
+      const ch = await chatChannels.create({ name: newChName, type: 'model', model_id: newChModelId, project_id: projectId })
       setNewChName(''); setNewChModelId(''); setShowChannelModal(false)
       await loadChannels()
       if (ch?.id) setSelectedChannel(ch.id)

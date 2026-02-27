@@ -197,6 +197,23 @@ router.delete('/conversations/:id', (req, res) => {
 router.get('/models', async (req, res) => {
   const N8N_MODELS_URL = process.env.N8N_MODELS_URL;
   const DASHBOARD_ID = process.env.DASHBOARD_ID || '';
+  let allModels = [];
+
+  // OpenClaw (if configured)
+  if (OPENCLAW_TOKEN) {
+    try {
+      const response = await fetch(`${OPENCLAW_URL}/v1/models`, {
+        headers: { 'Authorization': `Bearer ${OPENCLAW_TOKEN}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const models = (data.data || data || []).map(m => ({ id: m.id, name: m.name || m.id, source: 'openclaw' }));
+        allModels.push(...models);
+      }
+    } catch (e) {
+      console.warn('OpenClaw models fetch failed:', e.message);
+    }
+  }
 
   // n8n webhook (if configured)
   if (N8N_MODELS_URL) {
@@ -206,22 +223,29 @@ router.get('/models', async (req, res) => {
       });
       if (response.ok) {
         const data = await response.json();
-        const models = (data.data || data || []).map(m => ({ id: m.id, name: m.name || m.id }));
-        if (models.length > 0) return res.json(models);
+        const models = (data.data || data || []).map(m => ({ id: m.id, name: m.name || m.id, source: 'n8n' }));
+        allModels.push(...models);
       }
     } catch (e) {
       console.warn('n8n models fetch failed:', e.message);
     }
   }
 
-  // Fallback: OpenWebUI
-  if (!OPENWEBUI_API_KEY) return res.json([]);
-  try {
-    const response = await fetch(`${OPENWEBUI_URL}/api/models`, { headers: { 'Authorization': `Bearer ${OPENWEBUI_API_KEY}` } });
-    if (!response.ok) return res.json([]);
-    const data = await response.json();
-    res.json((data.data || data || []).map(m => ({ id: m.id, name: m.name || m.id })));
-  } catch { res.json([]); }
+  // OpenWebUI (if configured)
+  if (OPENWEBUI_API_KEY) {
+    try {
+      const response = await fetch(`${OPENWEBUI_URL}/api/models`, { headers: { 'Authorization': `Bearer ${OPENWEBUI_API_KEY}` } });
+      if (response.ok) {
+        const data = await response.json();
+        const models = (data.data || data || []).map(m => ({ id: m.id, name: m.name || m.id, source: 'openwebui' }));
+        allModels.push(...models);
+      }
+    } catch (e) {
+      console.warn('OpenWebUI models fetch failed:', e.message);
+    }
+  }
+
+  res.json(allModels);
 });
 
 module.exports = router;
