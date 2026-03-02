@@ -31,13 +31,28 @@ export default function App() {
   const [editProjectColor, setEditProjectColor] = useState('#10b981')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  // Tab title badge for unread changes
+  const unreadCount = useRef(0);
+  const originalTitle = useRef(document.title);
+
+  useEffect(() => {
+    const onFocus = () => {
+      unreadCount.current = 0;
+      document.title = originalTitle.current;
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
   // SSE: real-time updates
   const handleSSEEvent = useCallback((event) => {
     // Dispatch to child components via custom window event
     window.dispatchEvent(new CustomEvent('sse-event', { detail: event }));
     
-    // Browser notifications (only when tab is not focused)
+    // Tab title badge + browser notifications (only when tab is not focused)
     if (document.hidden) {
+      unreadCount.current += 1;
+      document.title = `(${unreadCount.current}) ${originalTitle.current}`;
       switch (event.type) {
         case 'kanban': {
           const { action, card, cardId } = event.data;
