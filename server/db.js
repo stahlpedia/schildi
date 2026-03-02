@@ -678,18 +678,7 @@ try {
 // --- Migration: Move "Persönlicher Stock" from context to content ---
 db.prepare("UPDATE context_folders SET category = 'content' WHERE name = 'Persönlicher Stock' AND category = 'context'").run();
 
-// --- Migration: settings table for app configuration ---
-try {
-  db.prepare("SELECT id FROM settings LIMIT 1").get();
-} catch {
-  db.exec(`CREATE TABLE settings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    key TEXT UNIQUE NOT NULL,
-    value TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  )`);
-}
+// --- Settings table already exists (created in initial schema) ---
 
 // --- Migration: push_subscriptions table for PWA push notifications ---
 try {
