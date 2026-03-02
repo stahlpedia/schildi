@@ -66,6 +66,8 @@ async function renderVideo(slides, options = {}) {
     // 2. Handle audio
     let audioPath = options.audio_path || null;
     if (!audioPath && options.audio_url) {
+      // Only allow http(s) URLs
+      if (!/^https?:\/\//i.test(options.audio_url)) throw new Error('Ungültige Audio-URL');
       const fetch = require('node-fetch');
       const res = await fetch(options.audio_url);
       if (!res.ok) throw new Error(`Audio-Download fehlgeschlagen: ${res.status}`);

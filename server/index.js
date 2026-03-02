@@ -7,7 +7,17 @@ const { ensureDefaultUser, login, authenticate } = require('./auth');
 const app = express();
 const PORT = process.env.PORT || 3333;
 
-app.use(cors());
+const CORS_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : ['http://localhost:3333', 'http://schildi-dashboard:3333', 'https://agent.stahlpedia.de'];
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow requests with no origin (mobile apps, curl, same-origin)
+    if (!origin || CORS_ORIGINS.includes(origin)) return cb(null, true);
+    cb(null, false);
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 // Auth

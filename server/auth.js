@@ -2,7 +2,9 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+// Generate a random JWT secret if none is set (persists per container lifecycle)
+const crypto = require('crypto');
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
 function ensureDefaultUser() {
   const username = process.env.DASHBOARD_USER || 'admin';
