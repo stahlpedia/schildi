@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { isLoggedIn, login as doLogin, logout, channel, admin, projects as projectsApi } from './api'
-import { useSSE, requestNotificationPermission, showNotification } from './useSSE'
+import { useSSE, requestNotificationPermission, showNotification, subscribePush } from './useSSE'
 import Login from './components/Login'
 import KanbanBoard from './components/KanbanBoard'
 import Admin from './components/Admin'
@@ -135,6 +135,7 @@ export default function App() {
   useEffect(() => {
     if (!loggedIn) return
     requestNotificationPermission()
+    subscribePush()
     checkUnanswered()
     loadBranding()
     loadProjects()

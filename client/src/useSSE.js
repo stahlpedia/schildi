@@ -100,3 +100,75 @@ export function showNotification(title, body, options = {}) {
     return n;
   }
 }
+
+/**
+ * Subscribe to push notifications
+ */
+export async function subscribePush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.warn('Push messaging nicht unterstützt');
+    return false;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    
+    // Check if already subscribed
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) {
+      console.log('Push bereits abonniert');
+      return true;
+    }
+
+    // Get VAPID public key from server
+    const response = await fetch('/api/push/vapid-key');
+    if (!response.ok) {
+      throw new Error('VAPID Key nicht verfügbar');
+    }
+    const { publicKey } = await response.json();
+
+    // Subscribe to push
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    });
+
+    // Send subscription to server
+    const saveResponse = await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify(subscription)
+    });
+
+    if (!saveResponse.ok) {
+      throw new Error('Subscription konnte nicht gespeichert werden');
+    }
+
+    console.log('Push-Notifications erfolgreich abonniert');
+    return true;
+  } catch (error) {
+    console.error('Push-Subscription fehlgeschlagen:', error);
+    return false;
+  }
+}
+
+/**
+ * Convert VAPID key to Uint8Array
+ */
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}

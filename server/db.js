@@ -678,9 +678,36 @@ try {
 // --- Migration: Move "Persönlicher Stock" from context to content ---
 db.prepare("UPDATE context_folders SET category = 'content' WHERE name = 'Persönlicher Stock' AND category = 'context'").run();
 
+// --- Migration: settings table for app configuration ---
+try {
+  db.prepare("SELECT id FROM settings LIMIT 1").get();
+} catch {
+  db.exec(`CREATE TABLE settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT UNIQUE NOT NULL,
+    value TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+}
+
+// --- Migration: push_subscriptions table for PWA push notifications ---
+try {
+  db.prepare("SELECT id FROM push_subscriptions LIMIT 1").get();
+} catch {
+  db.exec(`CREATE TABLE push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    endpoint TEXT UNIQUE NOT NULL,
+    keys_p256dh TEXT NOT NULL,
+    keys_auth TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+}
+
 // Enable foreign keys after all migrations are done
 db.pragma('foreign_keys = ON');
 
 // Export db + default project id
 db.DEFAULT_PROJECT_ID = DEFAULT_PROJECT_ID;
+db.getDb = () => db;
 module.exports = db;

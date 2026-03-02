@@ -1,0 +1,23 @@
+{
+  "name": "Schildi Dashboard",
+  "short_name": "Schildi",
+  "description": "Dashboard für KI-Agenten und Projektmanagement",
+  "theme_color": "#10b981",
+  "background_color": "#030712",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
