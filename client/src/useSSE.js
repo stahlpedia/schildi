@@ -114,26 +114,27 @@ export async function subscribePush() {
     const registration = await navigator.serviceWorker.ready;
     
     // Check if already subscribed
-    const existingSubscription = await registration.pushManager.getSubscription();
-    if (existingSubscription) {
-      console.log('Push bereits abonniert');
-      return true;
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      // Get VAPID public key from server
+      const response = await fetch('/api/push/vapid-key');
+      if (!response.ok) {
+        throw new Error('VAPID Key nicht verfügbar');
+      }
+      const { publicKey } = await response.json();
+
+      // Subscribe to push
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey)
+      });
+      console.log('Push neu abonniert');
+    } else {
+      console.log('Push bereits abonniert, synchronisiere mit Server');
     }
 
-    // Get VAPID public key from server
-    const response = await fetch('/api/push/vapid-key');
-    if (!response.ok) {
-      throw new Error('VAPID Key nicht verfügbar');
-    }
-    const { publicKey } = await response.json();
-
-    // Subscribe to push
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey)
-    });
-
-    // Send subscription to server
+    // Always sync subscription to server (important after backend reset/redeploy)
     const saveResponse = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: {
