@@ -40,11 +40,15 @@ export default function App() {
     if (document.hidden) {
       switch (event.type) {
         case 'kanban': {
-          const { action, card } = event.data;
+          const { action, card, cardId } = event.data;
           if (action === 'created') {
             showNotification('Neuer Task', card?.title || 'Ein Task wurde erstellt', { tag: `kanban-${card?.id}` });
-          } else if (action === 'updated' && card?.column_name === 'done') {
-            showNotification('Task erledigt ✅', card?.title || '', { tag: `kanban-${card?.id}` });
+          } else if (action === 'updated') {
+            const status = card?.column_name;
+            const label = status === 'done' ? '✅ Erledigt' : status === 'in-progress' ? '🔄 In Arbeit' : status || 'Aktualisiert';
+            showNotification(`Task: ${label}`, card?.title || '', { tag: `kanban-${card?.id}` });
+          } else if (action === 'deleted') {
+            showNotification('Task gelöscht', `Task #${cardId} wurde entfernt`, { tag: `kanban-${cardId}` });
           }
           break;
         }
@@ -52,13 +56,22 @@ export default function App() {
           const { action, file } = event.data;
           if (action === 'uploaded') {
             showNotification('Neue Datei', file?.filename || 'Eine Datei wurde hochgeladen', { tag: `content-${file?.id}` });
+          } else if (action === 'updated') {
+            showNotification('Datei aktualisiert', file?.filename || '', { tag: `content-${file?.id}` });
+          } else if (action === 'deleted') {
+            showNotification('Datei gelöscht', 'Eine Datei wurde entfernt', { tag: `content-del` });
           }
           break;
         }
         case 'channel': {
-          const { action, message } = event.data;
+          const { action } = event.data;
           if (action === 'agent_reply') {
             showNotification('Neue Antwort', 'Der Agent hat geantwortet', { tag: `channel-${event.data.conversationId}` });
+          } else if (action === 'message') {
+            const msg = event.data.message;
+            if (msg?.author === 'agent') {
+              showNotification('Neue Nachricht', msg.text?.slice(0, 100) || '', { tag: `channel-${event.data.conversationId}` });
+            }
           }
           break;
         }
