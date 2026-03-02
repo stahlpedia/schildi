@@ -98,6 +98,7 @@ app.get('/manifest.json', (req, res) => {
     background_color: '#030712',
     display: 'standalone',
     orientation: 'portrait-primary',
+
     start_url: '/',
     scope: '/',
     icons,

@@ -1,6 +1,6 @@
 const express = require('express');
 const webpush = require('web-push');
-const { getDb } = require('../db');
+const db = require('../db');
 const { authenticate } = require('../auth');
 
 const router = express.Router();
@@ -9,8 +9,6 @@ const router = express.Router();
 let vapidKeys = null;
 
 async function initVapidKeys() {
-  const db = getDb();
-  
   // Check if VAPID keys exist in database
   const existing = db.prepare('SELECT value FROM settings WHERE key = ?').get('vapid_keys');
   
@@ -55,7 +53,7 @@ router.get('/vapid-key', (req, res) => {
 router.post('/subscribe', authenticate, (req, res) => {
   try {
     const subscription = req.body;
-    const db = getDb();
+    // db already imported;
     
     // Validate subscription object
     if (!subscription.endpoint || !subscription.keys) {
@@ -86,7 +84,7 @@ router.post('/subscribe', authenticate, (req, res) => {
 router.delete('/subscribe', authenticate, (req, res) => {
   try {
     const { endpoint } = req.body;
-    const db = getDb();
+    // db already imported;
     
     if (!endpoint) {
       return res.status(400).json({ error: 'Endpoint required' });
@@ -111,7 +109,7 @@ async function sendPushToAll(payload) {
   }
   
   try {
-    const db = getDb();
+    // db already imported;
     const subscriptions = db.prepare('SELECT * FROM push_subscriptions').all();
     
     const pushPromises = subscriptions.map(async (sub) => {
