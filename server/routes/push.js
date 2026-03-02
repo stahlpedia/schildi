@@ -29,7 +29,7 @@ async function initVapidKeys() {
     vapidKeys = webpush.generateVAPIDKeys();
     
     // Store in database
-    db.prepare('INSERT OR REPLACE INTO settings (key, value, created_at) VALUES (?, ?, datetime("now"))').run(
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, created_at) VALUES (?, ?, datetime('now'))").run(
       'vapid_keys',
       JSON.stringify(vapidKeys)
     );
@@ -74,7 +74,7 @@ router.post('/subscribe', authenticate, (req, res) => {
     db.prepare(`
       INSERT OR REPLACE INTO push_subscriptions 
       (endpoint, keys_p256dh, keys_auth, created_at) 
-      VALUES (?, ?, ?, datetime("now"))
+      VALUES (?, ?, ?, datetime('now'))
     `).run(
       subscription.endpoint,
       subscription.keys.p256dh,
