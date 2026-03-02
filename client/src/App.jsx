@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { isLoggedIn, login as doLogin, logout, channel, admin, projects as projectsApi } from './api'
+import { useSSE, requestNotificationPermission, showNotification } from './useSSE'
 import Login from './components/Login'
 import KanbanBoard from './components/KanbanBoard'
 import Admin from './components/Admin'
@@ -29,6 +30,43 @@ export default function App() {
   const [editProjectName, setEditProjectName] = useState('')
   const [editProjectColor, setEditProjectColor] = useState('#10b981')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  // SSE: real-time updates
+  const handleSSEEvent = useCallback((event) => {
+    // Dispatch to child components via custom window event
+    window.dispatchEvent(new CustomEvent('sse-event', { detail: event }));
+    
+    // Browser notifications (only when tab is not focused)
+    if (document.hidden) {
+      switch (event.type) {
+        case 'kanban': {
+          const { action, card } = event.data;
+          if (action === 'created') {
+            showNotification('Neuer Task', card?.title || 'Ein Task wurde erstellt', { tag: `kanban-${card?.id}` });
+          } else if (action === 'updated' && card?.column_name === 'done') {
+            showNotification('Task erledigt ✅', card?.title || '', { tag: `kanban-${card?.id}` });
+          }
+          break;
+        }
+        case 'content': {
+          const { action, file } = event.data;
+          if (action === 'uploaded') {
+            showNotification('Neue Datei', file?.filename || 'Eine Datei wurde hochgeladen', { tag: `content-${file?.id}` });
+          }
+          break;
+        }
+        case 'channel': {
+          const { action, message } = event.data;
+          if (action === 'agent_reply') {
+            showNotification('Neue Antwort', 'Der Agent hat geantwortet', { tag: `channel-${event.data.conversationId}` });
+          }
+          break;
+        }
+      }
+    }
+  }, []);
+
+  useSSE(loggedIn ? handleSSEEvent : () => {});
 
   const checkUnanswered = async () => {
     try {
@@ -62,6 +100,7 @@ export default function App() {
 
   useEffect(() => {
     if (!loggedIn) return
+    requestNotificationPermission()
     checkUnanswered()
     loadBranding()
     loadProjects()

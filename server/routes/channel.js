@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const db = require('../db');
 const { authenticate } = require('../auth');
+const { emit } = require('../lib/events');
 
 const OPENWEBUI_URL = process.env.OPENWEBUI_URL || 'http://open-webui:8080';
 const OPENWEBUI_API_KEY = process.env.OPENWEBUI_API_KEY || '';
@@ -93,6 +94,7 @@ router.post('/conversations/:id/messages', async (req, res) => {
   }
 
   const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+  emit('channel', { action: 'message', message: msg, conversationId: +req.params.id });
 
   // If agent channel + user message → call OpenClaw
   if (convo.ch_type === 'agent' && author === 'user' && OPENCLAW_TOKEN) {
@@ -107,15 +109,18 @@ router.post('/conversations/:id/messages', async (req, res) => {
       if (!response.ok) {
         const errText = await response.text();
         db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', `⚠️ Fehler: ${response.status} — ${errText}`);
+        emit('channel', { action: 'agent_reply', conversationId: +req.params.id, error: true });
       } else {
         const data = await response.json();
         const reply = data.choices?.[0]?.message?.content || '(Keine Antwort)';
         db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', reply);
+        emit('channel', { action: 'agent_reply', conversationId: +req.params.id });
       }
       db.prepare('UPDATE conversations SET has_unanswered = 1 WHERE id = ?').run(req.params.id);
     } catch (e) {
       db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', `⚠️ Verbindungsfehler: ${e.message}`);
       db.prepare('UPDATE conversations SET has_unanswered = 1 WHERE id = ?').run(req.params.id);
+      emit('channel', { action: 'agent_reply', conversationId: +req.params.id, error: true });
     }
   }
 

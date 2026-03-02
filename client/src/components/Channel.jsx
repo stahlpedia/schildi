@@ -57,6 +57,18 @@ export default function Channel({ projectId, onUpdate }) {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }
 
+  // SSE: auto-refresh on channel messages
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.type === 'channel') {
+        if (selected && e.detail.data?.conversationId === selected) loadMessages(selected);
+        loadConvos();
+      }
+    };
+    window.addEventListener('sse-event', handler);
+    return () => window.removeEventListener('sse-event', handler);
+  }, [selected, selectedChannel])
+
   useEffect(() => { setSelectedChannel(null); setSelected(null); setMessages([]); loadChannels(); loadModels() }, [projectId])
   useEffect(() => { if (selectedChannel) { setSelected(null); setMessages([]); loadConvos() } }, [selectedChannel])
   useEffect(() => { if (selected) loadMessages(selected) }, [selected])

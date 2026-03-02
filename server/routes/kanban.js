@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const db = require('../db');
 const { authenticate } = require('../auth');
+const { emit } = require('../lib/events');
 
 const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://openclaw:18789';
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
@@ -180,6 +181,7 @@ router.post('/tasks', (req, res) => {
     'INSERT INTO cards (title, description, column_name, labels, position, board_id, due_date, due_time, on_hold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(title, description, status, JSON.stringify(labels), (maxPos?.m || 0) + 1, bid, due_date || null, due_time || null, on_hold || 0);
   const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(result.lastInsertRowid);
+  emit('kanban', { action: 'created', card: { ...card, labels: JSON.parse(card.labels) } });
   res.status(201).json({ ...card, labels: JSON.parse(card.labels), status: card.column_name });
 });
 
@@ -192,6 +194,7 @@ router.post('/cards', (req, res) => {
     'INSERT INTO cards (title, description, column_name, labels, position, board_id, due_date, due_time, on_hold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(title, description, column_name, JSON.stringify(labels), (maxPos?.m || 0) + 1, bid, due_date || null, due_time || null, on_hold || 0);
   const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(result.lastInsertRowid);
+  emit('kanban', { action: 'created', card: { ...card, labels: JSON.parse(card.labels) } });
   res.status(201).json({ ...card, labels: JSON.parse(card.labels) });
 });
 
@@ -214,11 +217,13 @@ router.put('/cards/:id', (req, res) => {
       req.params.id
     );
   const updated = db.prepare('SELECT * FROM cards WHERE id = ?').get(req.params.id);
+  emit('kanban', { action: 'updated', card: { ...updated, labels: JSON.parse(updated.labels) } });
   res.json({ ...updated, labels: JSON.parse(updated.labels) });
 });
 
 router.delete('/cards/:id', (req, res) => {
   db.prepare('DELETE FROM cards WHERE id = ?').run(req.params.id);
+  emit('kanban', { action: 'deleted', cardId: +req.params.id });
   res.json({ ok: true });
 });
 

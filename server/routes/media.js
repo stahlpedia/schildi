@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const db = require('../db');
 const { authenticate } = require('../auth');
+const { emit } = require('../lib/events');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -176,6 +177,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
     }
 
     const file = db.prepare('SELECT * FROM media_files WHERE id = ?').get(fileId);
+    emit('content', { action: 'uploaded', file });
     res.status(201).json(file);
   } catch (error) {
     try { fs.unlinkSync(req.file.path); } catch {}
@@ -194,7 +196,9 @@ router.put('/files/:id', (req, res) => {
   }
   db.prepare("UPDATE media_files SET tags = ?, alt_text = ?, updated_at = datetime('now') WHERE id = ?")
     .run(parsedTags, alt_text !== undefined ? alt_text : file.alt_text, req.params.id);
-  res.json(db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id));
+  const updated = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id);
+  emit('content', { action: 'updated', file: updated });
+  res.json(updated);
 });
 
 router.delete('/files/:id', (req, res) => {
@@ -203,6 +207,7 @@ router.delete('/files/:id', (req, res) => {
   const resolvedPath = path.isAbsolute(file.filepath) ? file.filepath : path.resolve(path.join(__dirname, '..', '..'), file.filepath);
   try { fs.unlinkSync(resolvedPath); } catch (e) { console.warn('Could not delete:', resolvedPath, e.message); }
   db.prepare('DELETE FROM media_files WHERE id = ?').run(req.params.id);
+  emit('content', { action: 'deleted', fileId: +req.params.id });
   res.json({ ok: true });
 });
 

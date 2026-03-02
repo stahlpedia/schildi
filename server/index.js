@@ -73,6 +73,10 @@ app.put('/api/media/files/:id/content', authenticate, (req, res) => {
   res.json({ ok: true, size: newSize });
 });
 
+// SSE (Server-Sent Events) for real-time updates
+const { sseHandler } = require('./lib/events');
+app.get('/api/events', authenticate, sseHandler);
+
 // API Routes
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/kanban', require('./routes/kanban'));

@@ -82,6 +82,15 @@ export default function KanbanBoard(props = {}) {
     }
   }
 
+  // SSE: auto-refresh on kanban changes
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.type === 'kanban') load();
+    };
+    window.addEventListener('sse-event', handler);
+    return () => window.removeEventListener('sse-event', handler);
+  }, [selectedBoard])
+
   useEffect(() => { setSelectedBoard(null); loadBoards() }, [projectId])
   useEffect(() => { if (selectedBoard) load() }, [selectedBoard])
   useEffect(() => { if (viewMode === 'calendar') loadCalendar() }, [viewMode, calendarDate, projectId, selectedBoard])

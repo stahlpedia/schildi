@@ -45,6 +45,15 @@ export default function Content({ projectId, onNavigateToKanban }) {
 
   const selectedChannel = channels.find(c => c.id === selectedChannelId)
 
+  // SSE: auto-refresh on content changes
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.type === 'content' && selectedFolder && projectId) loadFiles();
+    };
+    window.addEventListener('sse-event', handler);
+    return () => window.removeEventListener('sse-event', handler);
+  }, [selectedFolder, projectId])
+
   useEffect(() => {
     if (projectId) {
       setLoading(true)
