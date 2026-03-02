@@ -5,6 +5,16 @@ const { authenticate } = require('../auth');
 
 const router = express.Router();
 
+function ensurePushTable() {
+  db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    endpoint TEXT UNIQUE NOT NULL,
+    keys_p256dh TEXT NOT NULL,
+    keys_auth TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+}
+
 // Initialize VAPID keys on first load
 let vapidKeys = null;
 
@@ -52,8 +62,8 @@ router.get('/vapid-key', (req, res) => {
  */
 router.post('/subscribe', authenticate, (req, res) => {
   try {
+    ensurePushTable();
     const subscription = req.body;
-    // db already imported;
     
     // Validate subscription object
     if (!subscription.endpoint || !subscription.keys) {
@@ -73,8 +83,8 @@ router.post('/subscribe', authenticate, (req, res) => {
     
     res.json({ success: true, message: 'Push subscription saved' });
   } catch (error) {
-    console.error('Push subscribe error:', error);
-    res.status(500).json({ error: 'Failed to save subscription' });
+    console.error('Push subscribe error:', error?.message || error);
+    res.status(500).json({ error: 'Failed to save subscription', detail: error?.message || String(error) });
   }
 });
 
@@ -83,8 +93,8 @@ router.post('/subscribe', authenticate, (req, res) => {
  */
 router.delete('/subscribe', authenticate, (req, res) => {
   try {
+    ensurePushTable();
     const { endpoint } = req.body;
-    // db already imported;
     
     if (!endpoint) {
       return res.status(400).json({ error: 'Endpoint required' });
@@ -109,7 +119,7 @@ async function sendPushToAll(payload) {
   }
   
   try {
-    // db already imported;
+    ensurePushTable();
     const subscriptions = db.prepare('SELECT * FROM push_subscriptions').all();
     
     const pushPromises = subscriptions.map(async (sub) => {
