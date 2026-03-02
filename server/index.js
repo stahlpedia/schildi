@@ -73,6 +73,37 @@ app.put('/api/media/files/:id/content', authenticate, (req, res) => {
   res.json({ ok: true, size: newSize });
 });
 
+// Dynamic manifest.json (uses branding logo if available)
+app.get('/manifest.json', (req, res) => {
+  const titleRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('branding_title');
+  const logoRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('branding_logo_path');
+  const title = titleRow?.value || 'Schildi Dashboard';
+  const hasLogo = logoRow?.value && fs.existsSync(logoRow.value);
+  
+  const icons = hasLogo
+    ? [
+        { src: '/api/admin/branding/logo-file', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/api/admin/branding/logo-file', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      ]
+    : [
+        { src: '/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
+        { src: '/icon-512.svg', sizes: '512x512', type: 'image/svg+xml' },
+      ];
+
+  res.json({
+    name: title,
+    short_name: title.length > 12 ? title.split(' ')[0] : title,
+    description: 'Dashboard für KI-Agenten und Projektmanagement',
+    theme_color: '#10b981',
+    background_color: '#030712',
+    display: 'standalone',
+    orientation: 'portrait-primary',
+    start_url: '/',
+    scope: '/',
+    icons,
+  });
+});
+
 // SSE (Server-Sent Events) for real-time updates
 const { sseHandler } = require('./lib/events');
 app.get('/api/events', authenticate, sseHandler);
