@@ -63,6 +63,12 @@ export default function App() {
           }
           break;
         }
+        case 'pages': {
+          const { action, domain, path } = event.data;
+          const label = action === 'created' ? 'Neue Datei' : action === 'updated' ? 'Datei aktualisiert' : 'Datei gelöscht';
+          showNotification(`Webapps: ${label}`, `${domain}/${path || ''}`, { tag: `pages-${domain}-${path}` });
+          break;
+        }
         case 'channel': {
           const { action } = event.data;
           if (action === 'agent_reply') {

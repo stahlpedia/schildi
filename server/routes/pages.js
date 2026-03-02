@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { authenticate } = require('../auth');
 const db = require('../db');
+const { emit } = require('../lib/events');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
@@ -321,6 +322,7 @@ router.post('/domains/:name/files', (req, res) => {
   try {
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, content || '', 'utf-8');
+    emit('pages', { action: 'created', domain: name, path: filePath });
     res.status(201).json({ name: path.basename(full), path: filePath });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -333,8 +335,11 @@ router.put('/domains/:name/files/*', (req, res) => {
   const full = safePath(name, filePath);
   if (!full) return res.status(400).json({ error: 'Ungültiger Pfad' });
   if (!fs.existsSync(full)) return res.status(404).json({ error: 'Datei nicht gefunden' });
-  try { fs.writeFileSync(full, content ?? '', 'utf-8'); res.json({ name: path.basename(full), path: filePath }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    fs.writeFileSync(full, content ?? '', 'utf-8');
+    emit('pages', { action: 'updated', domain: name, path: filePath });
+    res.json({ name: path.basename(full), path: filePath });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.delete('/domains/:name/files/*', (req, res) => {
@@ -344,8 +349,11 @@ router.delete('/domains/:name/files/*', (req, res) => {
   const full = safePath(name, filePath);
   if (!full) return res.status(400).json({ error: 'Ungültiger Pfad' });
   if (!fs.existsSync(full)) return res.status(404).json({ error: 'Datei nicht gefunden' });
-  try { fs.rmSync(full, { recursive: true, force: true }); res.json({ ok: true }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    fs.rmSync(full, { recursive: true, force: true });
+    emit('pages', { action: 'deleted', domain: name, path: filePath });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ============================================================

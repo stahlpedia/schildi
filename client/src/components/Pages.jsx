@@ -273,6 +273,15 @@ export default function Pages({ projectId, onNavigateToKanban }) {
     } catch (e) { setError(e.message) }
   }
 
+  // SSE: auto-refresh on pages changes
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.type === 'pages' && selectedDomain) loadFiles(selectedDomain);
+    };
+    window.addEventListener('sse-event', handler);
+    return () => window.removeEventListener('sse-event', handler);
+  }, [selectedDomain])
+
   useEffect(() => { setSelectedDomain(null); setSelectedFile(null); setFileTree([]); loadDomains(); loadPagesBoard() }, [projectId])
   useEffect(() => { if (selectedDomain) { loadFiles(selectedDomain); loadPasswords(selectedDomain); setSelectedFile(null) } }, [selectedDomain])
 
