@@ -135,7 +135,8 @@ export default function App() {
   useEffect(() => {
     if (!loggedIn) return
     requestNotificationPermission()
-    subscribePush()
+    // Delay push subscription to ensure service worker is ready
+    setTimeout(() => subscribePush(), 3000)
     checkUnanswered()
     loadBranding()
     loadProjects()
