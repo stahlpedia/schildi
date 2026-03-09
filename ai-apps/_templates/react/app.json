@@ -1,0 +1,5 @@
+{
+  "name": "react-template",
+  "version": "1.0.0",
+  "description": "React app scaffold with Express, SQLite and cookie auth"
+}

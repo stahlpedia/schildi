@@ -5,7 +5,7 @@ import Login from './components/Login'
 import KanbanBoard from './components/KanbanBoard'
 import Admin from './components/Admin'
 import Channel from './components/Channel'
-import Pages from './components/Pages'
+import Webapps from './components/Webapps'
 import Context from './components/Context'
 import Content from './components/Content'
 const TABS = ['Kanban', 'Content', 'Webapps', 'Channels', 'Kontext', 'Admin']
@@ -351,7 +351,7 @@ export default function App() {
           <KanbanBoard projectId={projectId} highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
         </div>
         <div style={{ display: tab === 'Content' ? 'block' : 'none' }}><Content projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
-        <div style={{ display: tab === 'Webapps' ? 'block' : 'none' }}><Pages projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
+        <div style={{ display: tab === 'Webapps' ? 'block' : 'none' }}><Webapps projectId={projectId} /></div>
         <div style={{ display: tab === 'Channels' ? 'block' : 'none' }}><Channel projectId={projectId} /></div>
         <div style={{ display: tab === 'Kontext' ? 'block' : 'none' }}><Context projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
         <div style={{ display: tab === 'Admin' ? 'block' : 'none' }}><Admin onLogout={() => { logout(); setLoggedIn(false) }} /></div>

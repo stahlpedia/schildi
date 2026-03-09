@@ -1,0 +1,5 @@
+{
+  "name": "basic-template",
+  "version": "1.0.0",
+  "description": "Basic app scaffold with Express, SQLite and cookie auth"
+}

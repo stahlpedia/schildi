@@ -131,6 +131,9 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/skills', require('./routes/skills'));
 app.use('/api/push', require('./routes/push').router);
 
+// Apps (Webapps Management)
+app.use('/api/apps', require('./routes/apps'));
+
 // Project-scoped route mounts
 // Kanban: /api/projects/:projectId/boards, /api/projects/:projectId/calendar
 app.use('/api', require('./routes/kanban'));

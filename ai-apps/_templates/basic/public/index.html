@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Basic Template</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Basic Template</h1>
+      <p class="muted">Register, login and test protected endpoint.</p>
+
+      <section class="card">
+        <h2>Auth</h2>
+        <form id="auth-form">
+          <label>
+            Email
+            <input id="email" type="email" required autocomplete="email" />
+          </label>
+          <label>
+            Password
+            <input id="password" type="password" required minlength="8" autocomplete="current-password" />
+          </label>
+          <div class="row">
+            <button type="button" id="register-btn">Register</button>
+            <button type="button" id="login-btn">Login</button>
+            <button type="button" id="logout-btn">Logout</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Session</h2>
+        <div class="row">
+          <button id="me-btn">Load /api/auth/me</button>
+          <button id="protected-btn">Load /api/protected</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Result</h2>
+        <pre id="output">Ready</pre>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

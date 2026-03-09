@@ -1,4 +1,6 @@
 const { Router } = require('express');
+const fs = require('fs');
+const path = require('path');
 const db = require('../db');
 const { authenticate } = require('../auth');
 const { emit } = require('../lib/events');
@@ -7,9 +9,71 @@ const OPENWEBUI_URL = process.env.OPENWEBUI_URL || 'http://open-webui:8080';
 const OPENWEBUI_API_KEY = process.env.OPENWEBUI_API_KEY || '';
 const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://openclaw:18789';
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
+const APPS_DIR = process.env.APPS_DIR || '/apps';
 
 const router = Router();
 router.use(authenticate);
+
+function listAppFiles(baseDir, currentDir, maxEntries = 200, state = { count: 0 }) {
+  if (state.count >= maxEntries) return [];
+  let entries = [];
+  try {
+    entries = fs.readdirSync(currentDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const result = [];
+  for (const entry of entries) {
+    if (state.count >= maxEntries) break;
+    if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === '.github') continue;
+
+    const fullPath = path.join(currentDir, entry.name);
+    const relPath = path.relative(baseDir, fullPath).split(path.sep).join('/');
+
+    if (entry.isDirectory()) {
+      result.push(relPath + '/');
+      state.count += 1;
+      if (entry.name !== 'data') {
+        const nested = listAppFiles(baseDir, fullPath, maxEntries, state);
+        result.push(...nested);
+      }
+    } else {
+      if (entry.name === '.env' || entry.name.startsWith('.env.')) continue;
+      result.push(relPath);
+      state.count += 1;
+    }
+  }
+
+  return result;
+}
+
+function buildAppContextPrompt(appName) {
+  const safeName = String(appName || '').trim();
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(safeName)) return null;
+
+  const appDir = path.resolve(APPS_DIR, safeName);
+  if (!fs.existsSync(appDir)) return null;
+
+  let appJson = null;
+  try {
+    const appJsonPath = path.join(appDir, 'app.json');
+    if (fs.existsSync(appJsonPath)) {
+      appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf-8'));
+    }
+  } catch {}
+
+  const fileList = listAppFiles(appDir, appDir, 200);
+
+  return [
+    'Du arbeitest an einer Dashboard App.',
+    `App Name: ${safeName}`,
+    appJson ? `app.json: ${JSON.stringify(appJson)}` : 'app.json: nicht gefunden',
+    'Dateibaum (gekürzt):',
+    fileList.map(f => `- ${f}`).join('\n') || '- leer',
+    'Regeln: Nur Dateien in dieser App bearbeiten. Keine Geheimnisse ausgeben. Vor Änderungen kurz den Plan nennen.'
+  ].join('\n');
+}
 
 // === Chat Channels (project-scoped where applicable) ===
 
@@ -101,14 +165,25 @@ router.post('/conversations/:id/messages', async (req, res) => {
     try {
       const history = db.prepare('SELECT author, text FROM messages WHERE conversation_id = ? ORDER BY created_at ASC').all(req.params.id);
       const chatMessages = history.map(m => ({ role: m.author === 'user' ? 'user' : 'assistant', content: m.text }));
+
+      let userSession = `schildi-dashboard-convo-${req.params.id}`;
+      if (typeof convo.ch_model_id === 'string' && convo.ch_model_id.startsWith('app:')) {
+        const appName = convo.ch_model_id.slice(4);
+        const appContext = buildAppContextPrompt(appName);
+        if (appContext) {
+          chatMessages.unshift({ role: 'system', content: appContext });
+          userSession = `schildi-dashboard-app-${appName}`;
+        }
+      }
+
       const response = await fetch(`${OPENCLAW_URL}/v1/chat/completions`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${OPENCLAW_TOKEN}`, 'Content-Type': 'application/json', 'x-openclaw-agent-id': 'main' },
-        body: JSON.stringify({ model: 'openclaw:main', messages: chatMessages, user: `schildi-dashboard-convo-${req.params.id}` })
+        body: JSON.stringify({ model: 'openclaw:main', messages: chatMessages, user: userSession })
       });
       if (!response.ok) {
         const errText = await response.text();
-        db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', `⚠️ Fehler: ${response.status} — ${errText}`);
+        db.prepare('INSERT INTO messages (conversation_id, author, text) VALUES (?, ?, ?)').run(req.params.id, 'agent', `⚠️ Fehler: ${response.status} ${errText}`);
         emit('channel', { action: 'agent_reply', conversationId: +req.params.id, error: true });
       } else {
         const data = await response.json();
