@@ -9,6 +9,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number.parseInt(process.env.PORT || '3000', 10);
 
+app.set('trust proxy', true);
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 

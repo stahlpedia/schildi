@@ -17,7 +17,10 @@ await build({
   target: ['es2022'],
   jsx: 'automatic',
   sourcemap: false,
-  minify: false,
+  minify: true,
+  define: {
+    'process.env.NODE_ENV': '"production"'
+  },
   logLevel: 'info',
   loader: {
     '.js': 'jsx',

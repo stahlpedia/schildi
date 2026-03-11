@@ -24,16 +24,33 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+function cleanupExpiredSessions() {
+  db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();
+}
+
 function sessionExpiresAt() {
   const ms = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
   return new Date(Date.now() + ms).toISOString();
 }
 
-function cookieOptions() {
+function isSecureRequest(req) {
+  if (process.env.COOKIE_SECURE === 'true') return true;
+  if (process.env.COOKIE_SECURE === 'false') return false;
+  if (req?.secure) return true;
+
+  const forwardedProto = req?.headers?.['x-forwarded-proto'];
+  if (typeof forwardedProto === 'string') {
+    return forwardedProto.split(',')[0].trim() === 'https';
+  }
+
+  return false;
+}
+
+function cookieOptions(req) {
   return {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecureRequest(req),
     path: '/'
   };
 }
@@ -67,7 +84,7 @@ export async function register(req, res) {
     .run(normalizedEmail, passwordHash);
 
   const user = { id: result.lastInsertRowid, email: normalizedEmail };
-  await createSession(res, user.id);
+  await createSession(req, res, user.id);
 
   return res.status(201).json({ user });
 }
@@ -78,6 +95,8 @@ export async function login(req, res) {
   if (!validateEmail(email) || typeof password !== 'string') {
     return res.status(400).json({ error: 'Invalid input' });
   }
+
+  cleanupExpiredSessions();
 
   const normalizedEmail = email.trim().toLowerCase();
   const user = db
@@ -93,7 +112,7 @@ export async function login(req, res) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
-  await createSession(res, user.id);
+  await createSession(req, res, user.id);
   return res.json({ user: { id: user.id, email: user.email } });
 }
 
@@ -105,7 +124,7 @@ export function logout(req, res) {
     db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(token));
   }
 
-  res.clearCookie(SESSION_COOKIE, cookieOptions());
+  res.clearCookie(SESSION_COOKIE, cookieOptions(req));
   return res.status(204).send();
 }
 
@@ -117,6 +136,8 @@ export function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  cleanupExpiredSessions();
+
   const session = db
     .prepare(
       `SELECT s.user_id, u.email
@@ -127,7 +148,7 @@ export function requireAuth(req, res, next) {
     .get(hashToken(token));
 
   if (!session) {
-    res.clearCookie(SESSION_COOKIE, cookieOptions());
+    res.clearCookie(SESSION_COOKIE, cookieOptions(req));
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -139,7 +160,9 @@ export function me(req, res) {
   return res.json({ user: req.user });
 }
 
-async function createSession(res, userId) {
+async function createSession(req, res, userId) {
+  cleanupExpiredSessions();
+
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashToken(token);
   const expiresAt = sessionExpiresAt();
@@ -151,7 +174,7 @@ async function createSession(res, userId) {
   );
 
   res.cookie(SESSION_COOKIE, token, {
-    ...cookieOptions(),
+    ...cookieOptions(req),
     maxAge: SESSION_TTL_DAYS * 24 * 60 * 60 * 1000
   });
 }
