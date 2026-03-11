@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { marked } from 'marked'
 import { context } from '../api'
 import CardModal from './CardModal'
 
@@ -35,6 +36,7 @@ export default function Content({ projectId, onNavigateToKanban }) {
   const [fileContent, setFileContent] = useState('')
   const [fileContentOriginal, setFileContentOriginal] = useState('')
   const [isEditingContent, setIsEditingContent] = useState(false)
+  const [textViewMode, setTextViewMode] = useState('preview')
   const [loadingContent, setLoadingContent] = useState(false)
   const [savingContent, setSavingContent] = useState(false)
 
@@ -189,6 +191,7 @@ export default function Content({ projectId, onNavigateToKanban }) {
     setFileContent('')
     setFileContentOriginal('')
     setIsEditingContent(false)
+    setTextViewMode('preview')
 
     if (isTextFile(file.filename)) {
       setLoadingContent(true)
@@ -208,6 +211,7 @@ export default function Content({ projectId, onNavigateToKanban }) {
       await context.saveFileContent(selectedFile.id, fileContent)
       setFileContentOriginal(fileContent)
       setIsEditingContent(false)
+      setTextViewMode('preview')
       await loadFiles()
     } catch (e) { alert('Fehler beim Speichern: ' + e.message) }
     finally { setSavingContent(false) }
@@ -252,8 +256,16 @@ export default function Content({ projectId, onNavigateToKanban }) {
   const isImage = (mimetype) => mimetype?.startsWith('image/')
   const isVideo = (mimetype) => mimetype?.startsWith('video/')
   const isAudio = (mimetype) => mimetype?.startsWith('audio/')
-  const TEXT_EXTENSIONS = new Set(['md', 'txt', 'json', 'yml', 'yaml', 'css', 'html', 'htm', 'js', 'jsx', 'ts', 'tsx', 'xml', 'csv', 'svg', 'toml', 'ini', 'cfg', 'sh', 'bash', 'py', 'rb', 'php', 'sql', 'env', 'log'])
-  const isTextFile = (filename) => { const ext = (filename || '').split('.').pop().toLowerCase(); return TEXT_EXTENSIONS.has(ext) }
+  const TEXT_EXTENSIONS = new Set(['md', 'markdown', 'txt', 'json', 'yml', 'yaml', 'css', 'html', 'htm', 'js', 'jsx', 'ts', 'tsx', 'xml', 'csv', 'svg', 'toml', 'ini', 'cfg', 'sh', 'bash', 'py', 'rb', 'php', 'sql', 'env', 'log'])
+  const getFileExtension = (filename) => ((filename || '').split('.').pop() || '').toLowerCase()
+  const isTextFile = (filename) => TEXT_EXTENSIONS.has(getFileExtension(filename))
+  const isMarkdownFile = (filename) => ['md', 'markdown'].includes(getFileExtension(filename))
+  const renderTextPreview = (filename, content) => {
+    if (isMarkdownFile(filename)) {
+      return marked.parse(content || '')
+    }
+    return null
+  }
   const serveUrl = (id) => context.serve(id)
 
   if (!projectId) return <div className="text-gray-500 text-center py-20">Bitte wähle ein Projekt aus.</div>
@@ -526,17 +538,40 @@ export default function Content({ projectId, onNavigateToKanban }) {
                           className="flex-1 w-full p-4 bg-gray-800 text-gray-200 text-sm font-mono resize-none focus:outline-none"
                           spellCheck={false}
                         />
+                      ) : textViewMode === 'preview' && isMarkdownFile(selectedFile.filename) ? (
+                        <div className="flex-1 overflow-y-auto p-6 bg-gray-800">
+                          <div
+                            className="prose prose-invert prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{ __html: renderTextPreview(selectedFile.filename, fileContent) }}
+                          />
+                        </div>
                       ) : (
                         <pre className="flex-1 w-full p-4 bg-gray-800 text-gray-200 text-sm font-mono overflow-auto whitespace-pre-wrap">{fileContent}</pre>
                       )}
                       <div className="flex items-center gap-2 p-3 border-t border-gray-700 bg-gray-850">
+                        {!isEditingContent && (
+                          <div className="flex bg-gray-800 rounded-lg border border-gray-700 overflow-hidden mr-2">
+                            <button
+                              onClick={() => setTextViewMode('preview')}
+                              className={`px-3 py-1 text-xs font-medium transition-colors ${textViewMode === 'preview' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                            >
+                              Vorschau
+                            </button>
+                            <button
+                              onClick={() => setTextViewMode('raw')}
+                              className={`px-3 py-1 text-xs font-medium transition-colors ${textViewMode === 'raw' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                            >
+                              Text
+                            </button>
+                          </div>
+                        )}
                         {isEditingContent ? (
                           <>
                             <button onClick={handleSaveContent} disabled={savingContent}
                               className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded text-sm font-medium transition-colors">
                               {savingContent ? 'Speichern...' : 'Speichern'}
                             </button>
-                            <button onClick={() => { setFileContent(fileContentOriginal); setIsEditingContent(false) }}
+                            <button onClick={() => { setFileContent(fileContentOriginal); setIsEditingContent(false); setTextViewMode('preview') }}
                               className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors">Abbrechen</button>
                             {fileContent !== fileContentOriginal && <span className="text-xs text-yellow-400 ml-2">Ungespeicherte Änderungen</span>}
                           </>
