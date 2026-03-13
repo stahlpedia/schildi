@@ -9,7 +9,7 @@ const fs = require('fs');
 const router = Router({ mergeParams: true });
 router.use(authenticate);
 
-const mediaDir = process.env.MEDIA_DIR || path.join(__dirname, '..', 'data', 'media');
+const mediaDir = process.env.CONTENT_DIR || process.env.MEDIA_DIR || path.join(__dirname, '..', 'data', 'media');
 fs.mkdirSync(mediaDir, { recursive: true });
 
 // Multer: store to temp first, rename after DB insert

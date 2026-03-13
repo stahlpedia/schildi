@@ -10,7 +10,7 @@ const router = Router({ mergeParams: true });
 router.use(authenticate);
 
 const http = require('http');
-const WEBSITES_DIR = process.env.WEBSITES_DIR || '/var/www/ai-websites';
+const PAGES_DIR = process.env.PAGES_DIR || process.env.WEBSITES_DIR || '/www';
 const CADDY_API = process.env.CADDY_API || 'http://caddy:2019';
 const ACME_EMAIL = process.env.ACME_EMAIL || 'admin@example.com';
 
@@ -35,14 +35,14 @@ function caddyRequest(method, urlPath, body) {
   });
 }
 
-fs.mkdirSync(WEBSITES_DIR, { recursive: true });
+fs.mkdirSync(PAGES_DIR, { recursive: true });
 
 // --- Validation helpers ---
 function isValidDomain(name) {
   return /^[a-zA-Z0-9][a-zA-Z0-9.-]+[a-zA-Z0-9]$/.test(name) && !name.includes('..');
 }
 function safePath(domain, filePath) {
-  const base = path.resolve(WEBSITES_DIR, domain);
+  const base = path.resolve(PAGES_DIR, domain);
   const full = path.resolve(base, filePath);
   if (!full.startsWith(base + path.sep) && full !== base) return null;
   return full;
@@ -75,7 +75,7 @@ function buildCaddyRoute(domain, authRules = []) {
   // File server (always last)
   subroutes.push({
     handle: [
-      { handler: 'vars', root: `/srv/websites/${domain}` },
+      { handler: 'vars', root: `/www/${domain}` },
       { handler: 'file_server', hide: ['/etc/caddy/Caddyfile'] }
     ]
   });
@@ -119,7 +119,7 @@ async function removeCaddyRoute(domain) {
 async function syncCaddyTls() {
   try {
     // Collect all domains: website domains + existing TLS subjects
-    const websiteDomains = fs.readdirSync(WEBSITES_DIR, { withFileTypes: true })
+    const websiteDomains = fs.readdirSync(PAGES_DIR, { withFileTypes: true })
       .filter(e => e.isDirectory()).map(e => e.name);
     // Read current TLS subjects to preserve non-website domains
     let existingSubjects = [];
@@ -147,7 +147,7 @@ async function syncCaddyTls() {
 
 async function registerAllCaddyRoutes() {
   try {
-    const entries = fs.readdirSync(WEBSITES_DIR, { withFileTypes: true });
+    const entries = fs.readdirSync(PAGES_DIR, { withFileTypes: true });
     for (const entry of entries) { if (entry.isDirectory()) await registerCaddyRoute(entry.name); }
     await syncCaddyTls();
   } catch (e) { console.error('[Caddy] Failed to register routes on startup:', e.message); }
@@ -182,7 +182,7 @@ router.get('/domains', (req, res) => {
   }
   // Legacy: filesystem-based listing
   try {
-    const entries = fs.readdirSync(WEBSITES_DIR, { withFileTypes: true });
+    const entries = fs.readdirSync(PAGES_DIR, { withFileTypes: true });
     const domains = entries.filter(e => e.isDirectory()).map(e => ({ name: e.name })).sort((a, b) => a.name.localeCompare(b.name));
     res.json(domains);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -194,7 +194,7 @@ router.post('/domains', async (req, res) => {
   const domainName = domain || name;
   if (!domainName || !isValidDomain(domainName)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
 
-  const domainDir = path.join(WEBSITES_DIR, domainName);
+  const domainDir = path.join(PAGES_DIR, domainName);
 
   try {
     if (projectId) {
@@ -221,7 +221,7 @@ router.post('/domains', async (req, res) => {
 router.delete('/domains/:name', async (req, res) => {
   const { name } = req.params;
   if (!isValidDomain(name)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
-  const domainDir = path.join(WEBSITES_DIR, name);
+  const domainDir = path.join(PAGES_DIR, name);
   if (!fs.existsSync(domainDir)) return res.status(404).json({ error: 'Domain nicht gefunden' });
   try {
     fs.rmSync(domainDir, { recursive: true, force: true });
@@ -294,7 +294,7 @@ router.delete('/:pageId/media/:id', (req, res) => {
 router.get('/domains/:name/files', (req, res) => {
   const { name } = req.params;
   if (!isValidDomain(name)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
-  const domainDir = path.join(WEBSITES_DIR, name);
+  const domainDir = path.join(PAGES_DIR, name);
   if (!fs.existsSync(domainDir)) return res.status(404).json({ error: 'Domain nicht gefunden' });
   try { res.json(buildFileTree(domainDir, domainDir)); }
   catch (e) { res.status(500).json({ error: e.message }); }

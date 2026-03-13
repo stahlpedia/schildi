@@ -315,27 +315,6 @@ export const contentProfiles = {
   remove: (pid, id) => api(`/projects/${pid}/content-profiles/${id}`, { method: 'DELETE' }),
 };
 
-// Apps (Webapps) API
-export const apps = {
-  list: () => api('/apps'),
-  get: (name) => api(`/apps/${encodeURIComponent(name)}`),
-  create: (name, template, domain, project_id) => api('/apps', { method: 'POST', body: JSON.stringify({ name, template, domain, project_id }) }),
-  importFromGit: (payload) => api('/apps/import', { method: 'POST', body: JSON.stringify(payload) }),
-  importMigrate: (payload) => api('/apps/import/migrate', { method: 'POST', body: JSON.stringify(payload) }),
-  remove: (name) => api(`/apps/${encodeURIComponent(name)}`, { method: 'DELETE' }),
-  start: (name) => api(`/apps/${encodeURIComponent(name)}/start`, { method: 'POST' }),
-  stop: (name) => api(`/apps/${encodeURIComponent(name)}/stop`, { method: 'POST' }),
-  restart: (name) => api(`/apps/${encodeURIComponent(name)}/restart`, { method: 'POST' }),
-  install: (name) => api(`/apps/${encodeURIComponent(name)}/install`, { method: 'POST' }),
-  export: (name, opts = {}) => api(`/apps/${encodeURIComponent(name)}/export`, { method: 'POST', body: JSON.stringify(opts) }),
-  tree: (name) => api(`/apps/${encodeURIComponent(name)}/tree`),
-  readFile: (name, filePath) => api(`/apps/${encodeURIComponent(name)}/files/${encodeURIComponent(filePath).replace(/%2F/g, '/')}`),
-  writeFile: (name, filePath, content) => api(`/apps/${encodeURIComponent(name)}/files/${encodeURIComponent(filePath).replace(/%2F/g, '/')}`, { method: 'PUT', body: JSON.stringify({ content }) }),
-  deleteFile: (name, filePath) => api(`/apps/${encodeURIComponent(name)}/files/${encodeURIComponent(filePath).replace(/%2F/g, '/')}`, { method: 'DELETE' }),
-  createDir: (name, filePath) => api(`/apps/${encodeURIComponent(name)}/files/${encodeURIComponent(filePath).replace(/%2F/g, '/')}`, { method: 'POST', body: JSON.stringify({ directory: true }) }),
-  logsUrl: (name) => `${BASE}/apps/${encodeURIComponent(name)}/logs`,
-};
-
 // Context Textfiles API (project-scoped)
 export const textfiles = {
   list: (pid, folderId) => api(`/projects/${pid}/context/folders/${folderId}/textfiles`),

@@ -337,7 +337,7 @@ router.post('/render/save', async (req, res) => {
 
     const tplName = template || 'custom';
     const fname = filename || `social-${tplName}-${Date.now()}.png`;
-    const baseMediaDir = process.env.MEDIA_DIR || path.join(__dirname, '../../data/media');
+    const baseMediaDir = process.env.CONTENT_DIR || process.env.MEDIA_DIR || path.join(__dirname, '../../data/media');
 
     const result = db.prepare(`
       INSERT INTO media_files (project_id, folder_id, filename, filepath, mimetype, size, tags, created_at, updated_at)
@@ -399,7 +399,7 @@ router.post('/render/video/save', async (req, res) => {
     }
 
     const fname = filename || `video-${Date.now()}.mp4`;
-    const baseMediaDir = process.env.MEDIA_DIR || path.join(__dirname, '../../data/media');
+    const baseMediaDir = process.env.CONTENT_DIR || process.env.MEDIA_DIR || path.join(__dirname, '../../data/media');
 
     const result = db.prepare(`
       INSERT INTO media_files (project_id, folder_id, filename, filepath, mimetype, size, tags, created_at, updated_at)

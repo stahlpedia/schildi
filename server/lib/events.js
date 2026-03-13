@@ -110,7 +110,7 @@ function createPushPayload(type, data) {
                    action === 'updated' ? 'Datei aktualisiert' : 
                    'Datei gelöscht';
       return {
-        title: `Webapps: ${label}`,
+        title: `Pages: ${label}`,
         body: `${domain}/${path || ''}`,
         tag: `pages-${domain}-${path}`,
         data: { type, action, domain, path }

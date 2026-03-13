@@ -84,12 +84,12 @@ export default function Channel({ projectId, onUpdate }) {
       await loadChannels()
       if (ch?.id) setSelectedChannel(ch.id)
     } catch (e) {
-      alert('Channel erstellen fehlgeschlagen: ' + e.message)
+      alert('Agent erstellen fehlgeschlagen: ' + e.message)
     }
   }
 
   const handleDeleteChannel = async () => {
-    if (!selectedChannel || !confirm('Channel löschen? Unterhaltungen werden nach Schildi verschoben.')) return
+    if (!selectedChannel || !confirm('Agent löschen? Unterhaltungen werden nach Schildi verschoben.')) return
     try {
       await chatChannels.remove(selectedChannel)
       setSelectedChannel(null)
@@ -243,7 +243,7 @@ export default function Channel({ projectId, onUpdate }) {
               </svg>
             </button>
             <span className="text-lg">💬</span>
-            <span className="text-sm font-semibold text-gray-300">Channels</span>
+            <span className="text-sm font-semibold text-gray-300">Agents</span>
             {currentChannel?.model_id && (
               <span className="hidden md:inline text-[10px] bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full">{currentChannel.model_id}</span>
             )}
@@ -304,7 +304,7 @@ export default function Channel({ projectId, onUpdate }) {
       {showChannelModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 md:p-0" onClick={() => setShowChannelModal(false)}>
           <div className="bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-700 w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Neuer Channel</h3>
+            <h3 className="text-lg font-bold mb-4">Neuer Agent</h3>
             <input value={newChName} onChange={e => setNewChName(e.target.value)} placeholder="Channel Name"
               className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" autoFocus />
             <select value={newChModelId} onChange={e => setNewChModelId(e.target.value)}

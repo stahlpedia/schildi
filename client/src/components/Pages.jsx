@@ -384,7 +384,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
           <span className="text-lg">🌐</span>
           <select value={selectedDomain} onChange={e => setSelectedDomain(e.target.value)}
             className="flex-1 md:flex-none px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500">
-            <option value="">Domain wählen...</option>
+            <option value="">Site wählen...</option>
             {domains.map(d => <option key={d.domain || d.name} value={d.domain || d.name}>{d.domain || d.name}</option>)}
           </select>
         </div>
@@ -396,10 +396,10 @@ export default function Pages({ projectId, onNavigateToKanban }) {
               className="px-3 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-medium transition-colors">👁️ Vorschau</button>
           )}
           <button onClick={() => setShowNewDomain(true)}
-            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Neue Domain</button>
+            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Neue Site</button>
           {selectedDomain && (
             <button onClick={handleDeleteDomain}
-              className="px-3 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-xs transition-colors">🗑️ Domain löschen</button>
+              className="px-3 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-xs transition-colors">🗑️ Site löschen</button>
           )}
         </div>
       </div>
@@ -419,7 +419,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
               <FileTree tree={fileTree} selected={selectedFile?.path} onSelect={loadFile} protectedPaths={protectedPaths} onLockClick={projectId ? (entry) => { setShowPasswordModal(entry); setPwPassword(''); setPwUsername('user') } : null} />
             ) : (
               <p className="text-gray-500 text-center py-6 text-xs">
-                {selectedDomain ? 'Keine Dateien' : 'Domain wählen'}
+                {selectedDomain ? 'Keine Dateien' : 'Site wählen'}
               </p>
             )}
           </div>
@@ -447,7 +447,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
                   <FileTree tree={fileTree} selected={selectedFile?.path} onSelect={(file) => { loadFile(file); setSidebarOpen(false); }} protectedPaths={protectedPaths} onLockClick={projectId ? (entry) => { setShowPasswordModal(entry); setPwPassword(''); setPwUsername('user'); setSidebarOpen(false) } : null} />
                 ) : (
                   <p className="text-gray-500 text-center py-6 text-xs">
-                    {selectedDomain ? 'Keine Dateien' : 'Domain wählen'}
+                    {selectedDomain ? 'Keine Dateien' : 'Site wählen'}
                   </p>
                 )}
               </div>
@@ -489,7 +489,7 @@ export default function Pages({ projectId, onNavigateToKanban }) {
               {showImagePanel && (
                 <div className="border-t border-gray-800 p-3">
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-sm font-semibold text-gray-300">Bilder aus Kontext</span>
+                    <span className="text-sm font-semibold text-gray-300">Bilder aus Content</span>
                     <select value={selectedContextFolder || ''} onChange={e => { setSelectedContextFolder(+e.target.value); loadContextFiles(+e.target.value) }}
                       className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white focus:outline-none focus:border-emerald-500">
                       {contextFolders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
@@ -521,9 +521,9 @@ export default function Pages({ projectId, onNavigateToKanban }) {
 
       {/* New Domain Modal */}
       {showNewDomain && (
-        <Modal title="Neue Domain" onClose={() => setShowNewDomain(false)}>
+        <Modal title="Neue Site" onClose={() => setShowNewDomain(false)}>
           <div>
-            <label className="text-xs text-gray-400">Domain-Name</label>
+            <label className="text-xs text-gray-400">Domain oder Hostname</label>
             <input value={newDomainName} onChange={e => setNewDomainName(e.target.value)} placeholder="z.B. info.transloggpt.de"
               onKeyDown={e => e.key === 'Enter' && handleCreateDomain()}
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
