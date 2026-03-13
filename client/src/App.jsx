@@ -6,11 +6,10 @@ import KanbanBoard from './components/KanbanBoard'
 import Admin from './components/Admin'
 import Channel from './components/Channel'
 import Pages from './components/Pages'
-import Plugins from './components/Plugins'
-import Workspace from './components/Workspace'
+import Openclaw from './components/Openclaw'
 import ContentBrowser from './components/ContentBrowser'
 
-const TABS = ['Kanban', 'Agents', 'Content', 'Pages', 'Workspace', 'Plugins', 'Admin']
+const TABS = ['Kanban', 'Agents', 'Content', 'Pages', 'Openclaw', 'Admin']
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn())
@@ -210,8 +209,7 @@ export default function App() {
         <div style={{ display: tab === 'Agents' ? 'block' : 'none' }}><Channel projectId={projectId} /></div>
         <div style={{ display: tab === 'Content' ? 'block' : 'none' }}><ContentBrowser /></div>
         <div style={{ display: tab === 'Pages' ? 'block' : 'none' }}><Pages projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
-        <div style={{ display: tab === 'Workspace' ? 'block' : 'none' }}><Workspace projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
-        <div style={{ display: tab === 'Plugins' ? 'block' : 'none' }}><Plugins /></div>
+        <div style={{ display: tab === 'Openclaw' ? 'block' : 'none' }}><Openclaw /></div>
         <div style={{ display: tab === 'Admin' ? 'block' : 'none' }}><Admin onLogout={() => { logout(); setLoggedIn(false) }} /></div>
       </main>
     </div>

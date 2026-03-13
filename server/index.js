@@ -129,6 +129,7 @@ app.use('/api/pages', require('./routes/pages'));
 app.use('/api/attachments', require('./routes/attachments'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/skills', require('./routes/skills'));
+app.use('/api/workspace', require('./routes/workspaceBrowser'));
 app.use('/api/push', require('./routes/push').router);
 
 // Project-scoped route mounts
