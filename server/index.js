@@ -145,6 +145,9 @@ const mediaRouter = require('./routes/media');
 app.use('/api/projects/:projectId/context', mediaRouter);
 app.use('/api/media', mediaRouter);
 
+// Content Browser (Dateisystem)
+app.use('/api/content', require('./routes/contentBrowser'));
+
 // Content Profiles: /api/projects/:projectId/content-profiles
 app.use('/api/projects/:projectId/content-profiles', require('./routes/content-profiles'));
 

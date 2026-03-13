@@ -8,7 +8,7 @@ import Channel from './components/Channel'
 import Pages from './components/Pages'
 import Plugins from './components/Plugins'
 import Workspace from './components/Workspace'
-import Content from './components/Content'
+import ContentBrowser from './components/ContentBrowser'
 
 const TABS = ['Kanban', 'Agents', 'Content', 'Pages', 'Workspace', 'Plugins', 'Admin']
 
@@ -208,7 +208,7 @@ export default function App() {
           <KanbanBoard projectId={projectId} highlightTaskId={highlightTaskId} selectedBoardId={selectedBoardId} onTaskHighlighted={() => setHighlightTaskId(null)} />
         </div>
         <div style={{ display: tab === 'Agents' ? 'block' : 'none' }}><Channel projectId={projectId} /></div>
-        <div style={{ display: tab === 'Content' ? 'block' : 'none' }}><Content projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
+        <div style={{ display: tab === 'Content' ? 'block' : 'none' }}><ContentBrowser /></div>
         <div style={{ display: tab === 'Pages' ? 'block' : 'none' }}><Pages projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
         <div style={{ display: tab === 'Workspace' ? 'block' : 'none' }}><Workspace projectId={projectId} onNavigateToKanban={handleNavigateToKanban} /></div>
         <div style={{ display: tab === 'Plugins' ? 'block' : 'none' }}><Plugins /></div>
