@@ -3,8 +3,11 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const { authenticate } = require('../auth');
 
 const CONTENT_DIR = process.env.CONTENT_DIR || process.env.MEDIA_DIR || '/content';
+
+router.use(authenticate);
 
 // Sicherheit: Pfad darf nicht aus CONTENT_DIR ausbrechen
 function safePath(userPath) {

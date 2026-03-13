@@ -22,11 +22,15 @@ function ensureDefaultUser() {
 
 function authenticate(req, res, next) {
   const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) {
+  const bearerToken = auth && auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  const queryToken = typeof req.query?.token === 'string' ? req.query.token : null;
+  const token = bearerToken || queryToken;
+
+  if (!token) {
     return res.status(401).json({ error: 'Nicht autorisiert' });
   }
   try {
-    req.user = jwt.verify(auth.slice(7), JWT_SECRET);
+    req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
     res.status(401).json({ error: 'Token ungültig' });
