@@ -7,7 +7,7 @@
     "build": "cd client && npm run build",
     "start": "NODE_ENV=production node server/index.js",
     "setup": "npm install && cd client && npm install && npm run build",
-    "test-render": "node -e \"require('./server/lib/renderer').renderTemplate('Zitat-Karte', {quote:'Test', author:'Schildi'}).then(png => {require('fs').writeFileSync('render-test.png', png); console.log('✅ Render test successful'); return require('./server/lib/renderer').closeBrowser()}).catch(e => {console.error(e); process.exit(1)})\""
+    "test-render": "echo 'Rendering moved to OpenClaw/Remotion'"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
@@ -20,7 +20,7 @@
     "marked": "^15.0.0",
     "multer": "^2.0.2",
     "node-fetch": "^2.7.0",
-    "puppeteer": "^23.0.0",
+
     "web-push": "^3.6.7"
   }
 }
