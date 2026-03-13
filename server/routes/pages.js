@@ -222,19 +222,29 @@ router.delete('/domains/:name', async (req, res) => {
   const { name } = req.params;
   if (!isValidDomain(name)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
   const domainDir = path.join(PAGES_DIR, name);
-  if (!fs.existsSync(domainDir)) return res.status(404).json({ error: 'Domain nicht gefunden' });
   try {
-    fs.rmSync(domainDir, { recursive: true, force: true });
+    const domainRec = db.prepare('SELECT id FROM pages_domains WHERE domain = ?').get(name);
+    const existsOnDisk = fs.existsSync(domainDir);
+
+    if (!existsOnDisk && !domainRec) {
+      return res.status(404).json({ error: 'Domain nicht gefunden' });
+    }
+
+    if (existsOnDisk) {
+      fs.rmSync(domainDir, { recursive: true, force: true });
+    }
+
     await removeCaddyRoute(name);
     await syncCaddyTls();
+
     // Also remove from DB
-    const domainRec = db.prepare('SELECT id FROM pages_domains WHERE domain = ?').get(name);
     if (domainRec) {
       db.prepare('DELETE FROM page_media WHERE page_id IN (SELECT id FROM pages WHERE domain_id = ?)').run(domainRec.id);
       db.prepare('DELETE FROM pages WHERE domain_id = ?').run(domainRec.id);
       db.prepare('DELETE FROM pages_domains WHERE id = ?').run(domainRec.id);
     }
-    res.json({ ok: true });
+
+    res.json({ ok: true, removedFromDisk: existsOnDisk, removedFromDb: !!domainRec });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
