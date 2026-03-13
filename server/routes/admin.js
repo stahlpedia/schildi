@@ -42,6 +42,14 @@ const uploadLogo = multer({
   }
 });
 
+function getSetting(key, fallback = null) {
+  return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? fallback;
+}
+
+function setSetting(key, value) {
+  db.prepare('INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime(\'now\'))').run(key, value);
+}
+
 // Serve logo file BEFORE auth middleware (loaded via <img src>, no token)
 router.get('/branding/logo-file', (req, res) => {
   try {
@@ -212,6 +220,48 @@ router.delete('/branding/logo', (req, res) => {
   } catch (error) {
     console.error('Logo delete error:', error);
     res.status(500).json({ error: 'Fehler beim Entfernen des Logos' });
+  }
+});
+
+// GitHub token settings
+router.get('/integrations/github', (req, res) => {
+  try {
+    const storedToken = getSetting('github_token', '');
+    const envToken = process.env.GITHUB_TOKEN || '';
+    const effectiveToken = storedToken || envToken;
+    res.json({
+      hasStoredToken: !!storedToken,
+      hasEnvToken: !!envToken,
+      hasToken: !!effectiveToken,
+      source: storedToken ? 'dashboard' : (envToken ? 'env' : null)
+    });
+  } catch (error) {
+    console.error('GitHub settings get error:', error);
+    res.status(500).json({ error: 'Fehler beim Laden der GitHub Einstellungen' });
+  }
+});
+
+router.put('/integrations/github', (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token || !token.trim()) {
+      return res.status(400).json({ error: 'GitHub Token ist erforderlich' });
+    }
+    setSetting('github_token', token.trim());
+    res.json({ message: 'GitHub Token gespeichert' });
+  } catch (error) {
+    console.error('GitHub settings save error:', error);
+    res.status(500).json({ error: 'Fehler beim Speichern des GitHub Tokens' });
+  }
+});
+
+router.delete('/integrations/github', (req, res) => {
+  try {
+    db.prepare('DELETE FROM settings WHERE key = ?').run('github_token');
+    res.json({ message: 'Gespeicherter GitHub Token entfernt' });
+  } catch (error) {
+    console.error('GitHub settings delete error:', error);
+    res.status(500).json({ error: 'Fehler beim Entfernen des GitHub Tokens' });
   }
 });
 

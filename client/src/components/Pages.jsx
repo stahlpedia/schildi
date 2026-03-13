@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { pages, projectPages, context, projectPages as pp } from '../api'
 import CardModal from './CardModal'
 
@@ -78,6 +78,23 @@ function getIcon(entry) {
   return '📄'
 }
 
+function extractErrorMessage(error, fallback) {
+  const raw = error?.message || ''
+  const cleaned = raw
+    .replace(/^Error:\s*/i, '')
+    .replace(/^"|"$/g, '')
+    .trim()
+
+  if (!cleaned) return fallback
+
+  if (cleaned.startsWith('<!DOCTYPE') || cleaned.startsWith('<html')) {
+    return fallback
+  }
+
+  const short = cleaned.length > 220 ? `${cleaned.slice(0, 217)}...` : cleaned
+  return short
+}
+
 function FileTree({ tree, selected, onSelect, protectedPaths = [], onLockClick, depth = 0 }) {
   const [expanded, setExpanded] = useState({})
   const toggle = (p) => setExpanded(prev => ({ ...prev, [p]: !prev[p] }))
@@ -122,11 +139,26 @@ function FileTree({ tree, selected, onSelect, protectedPaths = [], onLockClick, 
   )
 }
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, closeDisabled = false }) {
+  const handleClose = () => {
+    if (!closeDisabled) onClose()
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 md:p-0" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 md:p-0" onClick={handleClose}>
       <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 md:p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-white">{title}</h3>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-lg font-bold text-white">{title}</h3>
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={closeDisabled}
+            className="text-gray-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title={closeDisabled ? 'Bitte warten' : 'Schließen'}
+          >
+            ✕
+          </button>
+        </div>
         {children}
       </div>
     </div>
@@ -143,8 +175,21 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   const [showNewDomain, setShowNewDomain] = useState(false)
   const [showNewFile, setShowNewFile] = useState(false)
   const [showCreateTask, setShowCreateTask] = useState(false)
+  const [showGithubImport, setShowGithubImport] = useState(false)
   const [newDomainName, setNewDomainName] = useState('')
   const [newFilePath, setNewFilePath] = useState('')
+  const [githubImportForm, setGithubImportForm] = useState({
+    owner: '',
+    repo: '',
+    ref: '',
+    subpath: '',
+    clean: true,
+  })
+  const [githubImporting, setGithubImporting] = useState(false)
+  const [githubSyncing, setGithubSyncing] = useState(false)
+  const [githubImportSuccess, setGithubImportSuccess] = useState('')
+  const [githubActionInfo, setGithubActionInfo] = useState('')
+  const [githubSource, setGithubSource] = useState(null)
   const [pagesBoardId, setPagesBoardId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -171,6 +216,9 @@ export default function Pages({ projectId, onNavigateToKanban }) {
     createFile: (d, p, c) => projectPages.createFile(projectId, d, p, c),
     updateFile: (d, p, c) => projectPages.updateFile(projectId, d, p, c),
     deleteFile: (d, p) => projectPages.deleteFile(projectId, d, p),
+    source: (d) => projectPages.source(projectId, d),
+    importGithub: (d, data) => projectPages.importGithub(projectId, d, data),
+    sync: (d, data) => projectPages.sync(projectId, d, data),
   } : pages
 
   const loadDomains = async () => {
@@ -187,6 +235,20 @@ export default function Pages({ projectId, onNavigateToKanban }) {
       const tree = await pApi.files(domain)
       setFileTree(tree)
     } catch (e) { setFileTree([]); setError(e.message) }
+  }
+
+  const loadSource = async (domain) => {
+    if (!domain) {
+      setGithubSource(null)
+      return
+    }
+    try {
+      const source = await pApi.source(domain)
+      setGithubSource(source?.type === 'github' ? source : null)
+    } catch (e) {
+      setGithubSource(null)
+      setError(e.message)
+    }
   }
 
   const loadFile = async (entry) => {
@@ -283,7 +345,28 @@ export default function Pages({ projectId, onNavigateToKanban }) {
   }, [selectedDomain])
 
   useEffect(() => { setSelectedDomain(null); setSelectedFile(null); setFileTree([]); loadDomains(); loadPagesBoard() }, [projectId])
-  useEffect(() => { if (selectedDomain) { loadFiles(selectedDomain); loadPasswords(selectedDomain); setSelectedFile(null) } }, [selectedDomain])
+
+  useEffect(() => {
+    if (!githubImportSuccess) return
+    const timer = setTimeout(() => setGithubImportSuccess(''), 5000)
+    return () => clearTimeout(timer)
+  }, [githubImportSuccess])
+
+  useEffect(() => {
+    if (!githubActionInfo) return
+    const timer = setTimeout(() => setGithubActionInfo(''), 4000)
+    return () => clearTimeout(timer)
+  }, [githubActionInfo])
+  useEffect(() => {
+    if (selectedDomain) {
+      loadFiles(selectedDomain)
+      loadSource(selectedDomain)
+      loadPasswords(selectedDomain)
+      setSelectedFile(null)
+    } else {
+      setGithubSource(null)
+    }
+  }, [selectedDomain])
 
   const handleCreateDomain = async () => {
     if (!newDomainName.trim()) return
@@ -337,6 +420,66 @@ export default function Pages({ projectId, onNavigateToKanban }) {
     } catch (e) { setError(e.message) }
   }
 
+  const handleGithubImport = async () => {
+    if (!selectedDomain) {
+      setError('Bitte zuerst eine Site wählen')
+      return
+    }
+
+    if (githubImportForm.clean) {
+      const confirmed = window.confirm(`Clean Import für ${selectedDomain}?\n\nDabei werden vorhandene Dateien der Site vor dem Import ersetzt.`)
+      if (!confirmed) return
+    }
+
+    setGithubImporting(true)
+    setGithubImportSuccess('')
+    setGithubActionInfo(`Importiere ${githubImportForm.owner}/${githubImportForm.repo} nach ${selectedDomain}...`)
+    setError(null)
+
+    try {
+      await pApi.importGithub(selectedDomain, githubImportForm)
+      await loadFiles(selectedDomain)
+      await loadSource(selectedDomain)
+      setSelectedFile(null)
+      setFileContent('')
+      setEditorContent('')
+      setGithubImportSuccess(`Import für ${selectedDomain} erfolgreich abgeschlossen`)
+      setShowGithubImport(false)
+    } catch (e) {
+      setError(extractErrorMessage(e, 'GitHub Import fehlgeschlagen. Bitte Angaben prüfen und erneut versuchen.'))
+    } finally {
+      setGithubImporting(false)
+      setGithubActionInfo('')
+    }
+  }
+
+  const handleGithubSync = async () => {
+    if (!selectedDomain || !githubSource) {
+      setError('Für diese Site ist keine GitHub Quelle hinterlegt')
+      return
+    }
+
+    setGithubSyncing(true)
+    setGithubImportSuccess('')
+    setGithubActionInfo(`Synchronisiere ${selectedDomain} mit ${githubSource.owner}/${githubSource.repo}...`)
+    setError(null)
+
+    try {
+      await pApi.sync(selectedDomain)
+      await loadFiles(selectedDomain)
+      await loadSource(selectedDomain)
+      setSelectedFile(null)
+      setFileContent('')
+      setEditorContent('')
+      setGithubImportSuccess(`Sync für ${selectedDomain} erfolgreich abgeschlossen`)
+    } catch (e) {
+      setError(extractErrorMessage(e, 'GitHub Sync fehlgeschlagen. Bitte später erneut versuchen.'))
+    } finally {
+      setGithubSyncing(false)
+      setGithubActionInfo('')
+    }
+  }
+
   const hasChanges = selectedFile && editorContent !== fileContent
 
   const handlePreviewDomain = () => {
@@ -369,6 +512,20 @@ export default function Pages({ projectId, onNavigateToKanban }) {
         </div>
       )}
 
+      {githubImportSuccess && (
+        <div className="bg-emerald-900/40 border border-emerald-700 text-emerald-200 px-4 py-2 rounded-lg text-sm flex justify-between items-center">
+          {githubImportSuccess}
+          <button onClick={() => setGithubImportSuccess('')} className="text-emerald-400 hover:text-emerald-200 ml-4">✕</button>
+        </div>
+      )}
+
+      {githubActionInfo && (
+        <div className="bg-blue-900/30 border border-blue-700 text-blue-200 px-4 py-2 rounded-lg text-sm flex items-center gap-3">
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-400 animate-pulse" />
+          <span>{githubActionInfo}</span>
+        </div>
+      )}
+
       {/* Top bar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 bg-gray-900 rounded-xl border border-gray-800 px-4 py-3">
         <div className="flex items-center gap-3 flex-1">
@@ -391,6 +548,21 @@ export default function Pages({ projectId, onNavigateToKanban }) {
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => setShowCreateTask(true)}
             className="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition-colors">📋 Task erstellen</button>
+          <button
+            type="button"
+            onClick={() => setShowGithubImport(true)}
+            disabled={!selectedDomain || githubImporting || githubSyncing}
+            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-colors"
+            title={!selectedDomain ? 'Bitte zuerst eine Site wählen' : 'Site aus GitHub importieren'}
+          >{githubImporting ? 'Import läuft...' : 'GitHub Import'}</button>
+          {selectedDomain && githubSource && (
+            <button
+              type="button"
+              onClick={handleGithubSync}
+              disabled={githubSyncing}
+              className="px-3 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-colors"
+            >{githubSyncing ? 'Sync läuft...' : 'Sync'}</button>
+          )}
           {selectedDomain && (
             <button onClick={handlePreviewDomain}
               className="px-3 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-medium transition-colors">👁️ Vorschau</button>
@@ -403,6 +575,37 @@ export default function Pages({ projectId, onNavigateToKanban }) {
           )}
         </div>
       </div>
+
+      {selectedDomain && (
+        <div className="bg-gray-900 rounded-xl border border-gray-800 px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-semibold text-gray-200">Quelle</span>
+            {githubSource ? (
+              <span className="px-2 py-0.5 rounded-full bg-emerald-900/50 border border-emerald-700 text-emerald-300 text-[11px] font-medium">GitHub</span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full bg-gray-800 border border-gray-700 text-gray-400 text-[11px] font-medium">Keine Quelle</span>
+            )}
+          </div>
+          {githubSource ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div className="bg-gray-800/70 border border-gray-700 rounded-lg px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Repository</div>
+                <div className="text-gray-100 font-mono break-all">{githubSource.owner}/{githubSource.repo}</div>
+              </div>
+              <div className="bg-gray-800/70 border border-gray-700 rounded-lg px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Ref</div>
+                <div className="text-gray-100 font-mono break-all">{githubSource.ref || 'Standard-Branch'}</div>
+              </div>
+              <div className="bg-gray-800/70 border border-gray-700 rounded-lg px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Subpath</div>
+                <div className="text-gray-100 font-mono break-all">{githubSource.subpath || '/'}</div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">Für diese Site ist noch keine GitHub Quelle hinterlegt.</p>
+          )}
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex gap-4 flex-1 min-h-0 relative">
@@ -518,6 +721,79 @@ export default function Pages({ projectId, onNavigateToKanban }) {
           )}
         </div>
       </div>
+
+      {showGithubImport && (
+        <Modal title="GitHub Import" onClose={() => setShowGithubImport(false)} closeDisabled={githubImporting}>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-gray-800 bg-gray-800/50 px-3 py-2 text-xs text-gray-300">
+              Ziel: <span className="font-mono text-white">{selectedDomain || 'Keine Site gewählt'}</span>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400">Owner</label>
+              <input
+                value={githubImportForm.owner}
+                onChange={e => setGithubImportForm(prev => ({ ...prev, owner: e.target.value }))}
+                placeholder="z.B. stahlpedia"
+                disabled={githubImporting}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400">Repository</label>
+              <input
+                value={githubImportForm.repo}
+                onChange={e => setGithubImportForm(prev => ({ ...prev, repo: e.target.value }))}
+                placeholder="z.B. landingpage-kit"
+                disabled={githubImporting}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400">Branch oder Ref, optional</label>
+              <input
+                value={githubImportForm.ref}
+                onChange={e => setGithubImportForm(prev => ({ ...prev, ref: e.target.value }))}
+                placeholder="z.B. main"
+                disabled={githubImporting}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400">Unterordner, optional</label>
+              <input
+                value={githubImportForm.subpath}
+                onChange={e => setGithubImportForm(prev => ({ ...prev, subpath: e.target.value }))}
+                placeholder="z.B. dist oder site"
+                disabled={githubImporting}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+            </div>
+            <label className="flex items-start gap-3 text-sm text-gray-200 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={githubImportForm.clean}
+                onChange={e => setGithubImportForm(prev => ({ ...prev, clean: e.target.checked }))}
+                disabled={githubImporting}
+                className="mt-0.5 h-4 w-4 rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+              <span>
+                Zielordner vorher leeren
+                <span className="block text-xs text-gray-500 mt-1">Aktiviert fragt das UI vor dem Start noch einmal nach.</span>
+              </span>
+            </label>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setShowGithubImport(false)} disabled={githubImporting} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm">Schließen</button>
+            <button
+              onClick={handleGithubImport}
+              disabled={githubImporting || !selectedDomain || !githubImportForm.owner.trim() || !githubImportForm.repo.trim()}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium"
+            >
+              {githubImporting ? 'Import läuft...' : 'Import starten'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* New Domain Modal */}
       {showNewDomain && (

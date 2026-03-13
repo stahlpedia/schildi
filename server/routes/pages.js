@@ -5,6 +5,7 @@ const { emit } = require('../lib/events');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const router = Router({ mergeParams: true });
 router.use(authenticate);
@@ -13,6 +14,7 @@ const http = require('http');
 const PAGES_DIR = process.env.PAGES_DIR || process.env.WEBSITES_DIR || '/www';
 const CADDY_API = process.env.CADDY_API || 'http://caddy:2019';
 const ACME_EMAIL = process.env.ACME_EMAIL || 'admin@example.com';
+const IMPORT_META_FILE = '.schildi-source.json';
 
 // Use http.request instead of fetch for Caddy API calls.
 // Node's fetch (undici) sends an empty Origin header which Caddy rejects.
@@ -37,6 +39,10 @@ function caddyRequest(method, urlPath, body) {
 
 fs.mkdirSync(PAGES_DIR, { recursive: true });
 
+function getSetting(key, fallback = null) {
+  return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? fallback;
+}
+
 // --- Validation helpers ---
 function isValidDomain(name) {
   return /^[a-zA-Z0-9][a-zA-Z0-9.-]+[a-zA-Z0-9]$/.test(name) && !name.includes('..');
@@ -50,6 +56,121 @@ function safePath(domain, filePath) {
 function getMimeType(ext) {
   const map = { '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.xml': 'text/xml', '.txt': 'text/plain', '.md': 'text/markdown' };
   return map[ext] || 'text/plain';
+}
+function ensureDomainDir(domain) {
+  const domainDir = path.join(PAGES_DIR, domain);
+  fs.mkdirSync(domainDir, { recursive: true });
+  return domainDir;
+}
+function removeDirContents(dir, { preserve = [] } = {}) {
+  if (!fs.existsSync(dir)) return;
+  for (const entry of fs.readdirSync(dir)) {
+    if (preserve.includes(entry)) continue;
+    fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
+  }
+}
+function copyDirContents(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirContents(srcPath, destPath);
+    } else if (entry.isSymbolicLink()) {
+      continue;
+    } else {
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+function findExtractedRoot(tempDir) {
+  const entries = fs.readdirSync(tempDir, { withFileTypes: true }).filter(e => e.isDirectory());
+  if (entries.length !== 1) throw new Error('Konnte extrahierten Repository-Ordner nicht eindeutig bestimmen');
+  return path.join(tempDir, entries[0].name);
+}
+function normalizeSubpath(subpath) {
+  if (!subpath) return '';
+  return subpath.replace(/^\/+|\/+$/g, '');
+}
+function writeImportMeta(domain, meta) {
+  const full = safePath(domain, IMPORT_META_FILE);
+  fs.writeFileSync(full, JSON.stringify({ ...meta, updated_at: new Date().toISOString() }, null, 2), 'utf-8');
+}
+function readImportMeta(domain) {
+  const full = safePath(domain, IMPORT_META_FILE);
+  if (!full || !fs.existsSync(full)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(full, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+async function fetchGithubTarball({ owner, repo, ref, token }) {
+  const tarballUrl = ref
+    ? `https://api.github.com/repos/${owner}/${repo}/tarball/${encodeURIComponent(ref)}`
+    : `https://api.github.com/repos/${owner}/${repo}/tarball`;
+
+  const headers = {
+    'User-Agent': 'Schildi-Dashboard',
+    'Accept': 'application/vnd.github+json'
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const response = await fetch(tarballUrl, { headers, redirect: 'follow' });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`GitHub Download fehlgeschlagen: ${response.status} ${text}`);
+  }
+  return response.arrayBuffer();
+}
+
+async function importGithubSite({ domain, owner, repo, ref, subpath, clean, token }) {
+  if (!owner || !repo) throw new Error('owner und repo sind erforderlich');
+
+  const normalizedSubpath = normalizeSubpath(subpath);
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'schildi-gh-'));
+  const archivePath = path.join(tempDir, 'repo.tar.gz');
+
+  try {
+    const archive = await fetchGithubTarball({ owner, repo, ref, token });
+    fs.writeFileSync(archivePath, Buffer.from(archive));
+
+    const { execFile } = require('child_process');
+    await new Promise((resolve, reject) => {
+      execFile('tar', ['-xzf', archivePath, '-C', tempDir], (error, stdout, stderr) => {
+        if (error) return reject(new Error(stderr || error.message));
+        resolve(stdout);
+      });
+    });
+
+    const extractedRoot = findExtractedRoot(tempDir);
+    const sourceDir = normalizedSubpath ? path.join(extractedRoot, normalizedSubpath) : extractedRoot;
+
+    if (!fs.existsSync(sourceDir) || !fs.statSync(sourceDir).isDirectory()) {
+      throw new Error('Der angegebene Repo Pfad wurde nicht gefunden');
+    }
+
+    const domainDir = ensureDomainDir(domain);
+    if (clean) removeDirContents(domainDir, { preserve: [IMPORT_META_FILE] });
+    copyDirContents(sourceDir, domainDir);
+
+    const meta = {
+      type: 'github',
+      owner,
+      repo,
+      ref: ref ? ref : null,
+      subpath: normalizedSubpath,
+      clean: !!clean
+    };
+    writeImportMeta(domain, meta);
+    emit('pages', { action: 'github-import', domain, repo: `${owner}/${repo}`, ref: ref || null });
+    return meta;
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 }
 
 // --- Caddy helpers ---
@@ -159,6 +280,7 @@ function buildFileTree(dir, base) {
   const result = [];
   for (const entry of entries) {
     const relPath = path.relative(base, path.join(dir, entry.name));
+    if (entry.name === IMPORT_META_FILE) continue;
     if (entry.isDirectory()) {
       result.push({ name: entry.name, path: relPath, type: 'directory', children: buildFileTree(path.join(dir, entry.name), base) });
     } else {
@@ -246,6 +368,52 @@ router.delete('/domains/:name', async (req, res) => {
 
     res.json({ ok: true, removedFromDisk: existsOnDisk, removedFromDb: !!domainRec });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/domains/:name/source', (req, res) => {
+  const { name } = req.params;
+  if (!isValidDomain(name)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
+  const meta = readImportMeta(name);
+  res.json(meta || { type: null });
+});
+
+router.post('/domains/:name/import/github', async (req, res) => {
+  const { name } = req.params;
+  if (!isValidDomain(name)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
+
+  const token = req.body.token?.trim() || getSetting('github_token', '') || process.env.GITHUB_TOKEN || '';
+  const { owner, repo, ref, subpath, clean = true } = req.body;
+
+  try {
+    const meta = await importGithubSite({ domain: name, owner, repo, ref, subpath, clean, token });
+    res.json({ ok: true, source: meta });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/domains/:name/sync', async (req, res) => {
+  const { name } = req.params;
+  if (!isValidDomain(name)) return res.status(400).json({ error: 'Ungültiger Domain-Name' });
+
+  const meta = readImportMeta(name);
+  if (!meta || meta.type !== 'github') return res.status(400).json({ error: 'Keine GitHub Quelle für diese Site hinterlegt' });
+
+  const token = req.body.token?.trim() || getSetting('github_token', '') || process.env.GITHUB_TOKEN || '';
+  try {
+    const updated = await importGithubSite({
+      domain: name,
+      owner: meta.owner,
+      repo: meta.repo,
+      ref: meta.ref,
+      subpath: meta.subpath,
+      clean: meta.clean !== false,
+      token
+    });
+    res.json({ ok: true, source: updated });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ============================================================

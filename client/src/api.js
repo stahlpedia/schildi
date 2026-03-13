@@ -97,6 +97,9 @@ export const pages = {
   createFile: (domain, path, content) => api(`/pages/domains/${encodeURIComponent(domain)}/files`, { method: 'POST', body: JSON.stringify({ path, content }) }),
   updateFile: (domain, filePath, content) => api(`/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(filePath)}`, { method: 'PUT', body: JSON.stringify({ content }) }),
   deleteFile: (domain, path) => api(`/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  source: (domain) => api(`/pages/domains/${encodeURIComponent(domain)}/source`),
+  importGithub: (domain, data) => api(`/pages/domains/${encodeURIComponent(domain)}/import/github`, { method: 'POST', body: JSON.stringify(data) }),
+  sync: (domain, data = {}) => api(`/pages/domains/${encodeURIComponent(domain)}/sync`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Project-scoped pages
@@ -109,6 +112,9 @@ export const projectPages = {
   createFile: (pid, domain, path, content) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/files`, { method: 'POST', body: JSON.stringify({ path, content }) }),
   updateFile: (pid, domain, filePath, content) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(filePath)}`, { method: 'PUT', body: JSON.stringify({ content }) }),
   deleteFile: (pid, domain, path) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/files/${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  source: (pid, domain) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/source`),
+  importGithub: (pid, domain, data) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/import/github`, { method: 'POST', body: JSON.stringify(data) }),
+  sync: (pid, domain, data = {}) => api(`/projects/${pid}/pages/domains/${encodeURIComponent(domain)}/sync`, { method: 'POST', body: JSON.stringify(data) }),
   getMedia: (pid, pageId) => api(`/projects/${pid}/pages/${pageId}/media`),
   addMedia: (pid, pageId, mediaFileId) => api(`/projects/${pid}/pages/${pageId}/media`, { method: 'POST', body: JSON.stringify({ media_file_id: mediaFileId }) }),
   removeMedia: (pid, pageId, mediaId) => api(`/projects/${pid}/pages/${pageId}/media/${mediaId}`, { method: 'DELETE' }),
@@ -201,6 +207,9 @@ export const admin = {
     return res.json();
   },
   deleteLogo: () => api('/admin/branding/logo', { method: 'DELETE' }),
+  githubSettings: () => api('/admin/integrations/github'),
+  saveGithubToken: (token) => api('/admin/integrations/github', { method: 'PUT', body: JSON.stringify({ token }) }),
+  deleteGithubToken: () => api('/admin/integrations/github', { method: 'DELETE' }),
 };
 
 // Media (deprecated - use context instead)
@@ -323,4 +332,3 @@ export const textfiles = {
   update: (pid, id, data) => api(`/projects/${pid}/context/textfiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (pid, id) => api(`/projects/${pid}/context/textfiles/${id}`, { method: 'DELETE' }),
 };
-
