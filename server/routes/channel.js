@@ -314,13 +314,7 @@ router.get('/models', async (req, res) => {
         allModels.push(...agents);
       }
     } catch (e) {
-      // /v1/agents may not exist yet; fall back to static list from env
-      const staticAgents = (process.env.OPENCLAW_AGENTS || 'main').split(',').map(id => id.trim()).filter(Boolean);
-      for (const id of staticAgents) {
-        if (!allModels.find(m => m.id === `agent:${id}`)) {
-          allModels.push({ id: `agent:${id}`, name: `Agent: ${id}`, source: 'openclaw-agent' });
-        }
-      }
+      // /v1/agents not available — agents can still be used by entering their id directly in the channel config
     }
   }
 
