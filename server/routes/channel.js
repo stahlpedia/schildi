@@ -176,10 +176,16 @@ router.post('/conversations/:id/messages', async (req, res) => {
         }
       }
 
+      // Resolve agent id: model_id can be "agent:video", "openclaw:video", or just "video"
+      let agentId = 'main';
+      if (typeof convo.ch_model_id === 'string' && convo.ch_model_id && !convo.ch_model_id.startsWith('app:')) {
+        const raw = convo.ch_model_id.replace(/^(agent:|openclaw:)/, '').trim();
+        if (raw) agentId = raw;
+      }
       const response = await fetch(`${OPENCLAW_URL}/v1/chat/completions`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${OPENCLAW_TOKEN}`, 'Content-Type': 'application/json', 'x-openclaw-agent-id': 'main' },
-        body: JSON.stringify({ model: 'openclaw:main', messages: chatMessages, user: userSession })
+        headers: { 'Authorization': `Bearer ${OPENCLAW_TOKEN}`, 'Content-Type': 'application/json', 'x-openclaw-agent-id': agentId },
+        body: JSON.stringify({ model: `openclaw:${agentId}`, messages: chatMessages, user: userSession })
       });
       if (!response.ok) {
         const errText = await response.text();
@@ -279,7 +285,7 @@ router.get('/models', async (req, res) => {
   const DASHBOARD_ID = process.env.DASHBOARD_ID || '';
   let allModels = [];
 
-  // OpenClaw (if configured)
+  // OpenClaw agents (if configured) — listed as selectable agent targets
   if (OPENCLAW_TOKEN) {
     try {
       const response = await fetch(`${OPENCLAW_URL}/v1/models`, {
@@ -292,6 +298,29 @@ router.get('/models', async (req, res) => {
       }
     } catch (e) {
       console.warn('OpenClaw models fetch failed:', e.message);
+    }
+    // Also expose configured OpenClaw agents as selectable targets
+    try {
+      const agentsResp = await fetch(`${OPENCLAW_URL}/v1/agents`, {
+        headers: { 'Authorization': `Bearer ${OPENCLAW_TOKEN}` }
+      });
+      if (agentsResp.ok) {
+        const agentsData = await agentsResp.json();
+        const agents = (agentsData.agents || agentsData.data || []).map(a => ({
+          id: `agent:${a.id}`,
+          name: `${a.identity?.emoji || ''} ${a.identity?.name || a.id}`.trim(),
+          source: 'openclaw-agent',
+        }));
+        allModels.push(...agents);
+      }
+    } catch (e) {
+      // /v1/agents may not exist yet; fall back to static list from env
+      const staticAgents = (process.env.OPENCLAW_AGENTS || 'main').split(',').map(id => id.trim()).filter(Boolean);
+      for (const id of staticAgents) {
+        if (!allModels.find(m => m.id === `agent:${id}`)) {
+          allModels.push({ id: `agent:${id}`, name: `Agent: ${id}`, source: 'openclaw-agent' });
+        }
+      }
     }
   }
 
