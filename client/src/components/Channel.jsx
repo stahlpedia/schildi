@@ -2,6 +2,12 @@ import React, { useState, useEffect, useRef } from 'react'
 import { channel, chatChannels, attachments } from '../api'
 import CardModal from './CardModal'
 
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
+
 export default function Channel({ projectId, onUpdate }) {
   const [channels, setChannels] = useState([])
   const [selectedChannel, setSelectedChannel] = useState(null)
@@ -18,16 +24,14 @@ export default function Channel({ projectId, onUpdate }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploading, setUploading] = useState(false)
-  // Channel creation
-  const [showChannelModal, setShowChannelModal] = useState(false)
-  const [newChName, setNewChName] = useState('')
-  const [newChModelId, setNewChModelId] = useState('')
-  const [models, setModels] = useState([])
-  // Channel editing
-  const [editingChannel, setEditingChannel] = useState(null)
-  const [editChannelName, setEditChannelName] = useState('')
-  const [editChannelModelId, setEditChannelModelId] = useState('')
-  // CardModal for creating tasks from messages
+  // OpenClaw agents (auto-detected)
+  const [ocAgents, setOcAgents] = useState([])
+  const [loadingAgents, setLoadingAgents] = useState(false)
+  // Add agent modal
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addAgentId, setAddAgentId] = useState('')
+  const [addAgentName, setAddAgentName] = useState('')
+  // CardModal
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [taskFromMessage, setTaskFromMessage] = useState('')
   const [taskTitle, setTaskTitle] = useState('')
@@ -42,8 +46,15 @@ export default function Channel({ projectId, onUpdate }) {
     }
   }
 
-  const loadModels = async () => {
-    try { const m = await chatChannels.models(); setModels(m) } catch {}
+  // Load OpenClaw agents from /api/channels/models (filtered to openclaw-agent source)
+  const loadOcAgents = async () => {
+    setLoadingAgents(true)
+    try {
+      const models = await chatChannels.models()
+      const agents = models.filter(m => m.source === 'openclaw-agent')
+      setOcAgents(agents)
+    } catch {}
+    setLoadingAgents(false)
   }
 
   const loadConvos = async () => {
@@ -58,39 +69,75 @@ export default function Channel({ projectId, onUpdate }) {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }
 
-  // SSE: auto-refresh on channel messages
   useEffect(() => {
     const handler = (e) => {
       if (e.detail?.type === 'channel') {
-        if (selected && e.detail.data?.conversationId === selected) loadMessages(selected);
-        loadConvos();
+        if (selected && e.detail.data?.conversationId === selected) loadMessages(selected)
+        loadConvos()
       }
-    };
-    window.addEventListener('sse-event', handler);
-    return () => window.removeEventListener('sse-event', handler);
+    }
+    window.addEventListener('sse-event', handler)
+    return () => window.removeEventListener('sse-event', handler)
   }, [selected, selectedChannel])
 
-  useEffect(() => { setSelectedChannel(null); setSelected(null); setMessages([]); loadChannels(); loadModels() }, [projectId])
-  useEffect(() => { if (selectedChannel) { setSelected(null); setMessages([]); loadConvos() } }, [selectedChannel])
+  useEffect(() => {
+    setSelectedChannel(null)
+    setSelected(null)
+    setMessages([])
+    loadChannels()
+    loadOcAgents()
+  }, [projectId])
+
+  useEffect(() => {
+    if (selectedChannel) { setSelected(null); setMessages([]); loadConvos() }
+  }, [selectedChannel])
+
   useEffect(() => { if (selected) loadMessages(selected) }, [selected])
 
   const currentChannel = channels.find(c => c.id === selectedChannel)
 
-  // Channel CRUD
-  const handleCreateChannel = async () => {
-    if (!newChName.trim() || !newChModelId) return
+  // Auto-create channel for an OpenClaw agent if it doesn't exist yet, then select it
+  const handleSelectAgent = async (agent) => {
+    // agent.id is e.g. "agent:video" or "agent:main"
+    const rawId = agent.id.replace(/^agent:/, '')
+    const existing = channels.find(c => c.model_id === agent.id || c.model_id === rawId)
+    if (existing) {
+      setSelectedChannel(existing.id)
+      return
+    }
     try {
-      const ch = await chatChannels.create({ name: newChName, type: 'model', model_id: newChModelId, project_id: projectId })
-      setNewChName(''); setNewChModelId(''); setShowChannelModal(false)
+      const ch = await chatChannels.create({
+        name: agent.name || rawId,
+        type: 'agent',
+        model_id: agent.id,
+        project_id: projectId
+      })
       await loadChannels()
       if (ch?.id) setSelectedChannel(ch.id)
     } catch (e) {
-      alert('Agent erstellen fehlgeschlagen: ' + e.message)
+      alert('Fehler: ' + e.message)
+    }
+  }
+
+  const handleAddManual = async () => {
+    if (!addAgentId.trim()) return
+    const id = addAgentId.trim().startsWith('agent:') ? addAgentId.trim() : `agent:${addAgentId.trim()}`
+    const name = addAgentName.trim() || addAgentId.trim()
+    try {
+      const ch = await chatChannels.create({ name, type: 'agent', model_id: id, project_id: projectId })
+      setShowAddModal(false)
+      setAddAgentId('')
+      setAddAgentName('')
+      await loadChannels()
+      await loadOcAgents()
+      if (ch?.id) setSelectedChannel(ch.id)
+    } catch (e) {
+      alert('Fehler: ' + e.message)
     }
   }
 
   const handleDeleteChannel = async () => {
-    if (!selectedChannel || !confirm('Agent löschen? Unterhaltungen werden nach Schildi verschoben.')) return
+    if (!selectedChannel || !confirm('Agent-Channel löschen?')) return
     try {
       await chatChannels.remove(selectedChannel)
       setSelectedChannel(null)
@@ -100,32 +147,6 @@ export default function Channel({ projectId, onUpdate }) {
     }
   }
 
-  const handleEditChannel = (channel) => {
-    setEditingChannel(channel.id)
-    setEditChannelName(channel.name)
-    setEditChannelModelId(channel.model_id || '')
-  }
-
-  const handleSaveChannelEdit = async () => {
-    if (!editChannelName.trim() || !editingChannel) return
-    try {
-      await chatChannels.update(editingChannel, { name: editChannelName, model_id: editChannelModelId })
-      setEditingChannel(null)
-      setEditChannelName('')
-      setEditChannelModelId('')
-      await loadChannels()
-    } catch (e) {
-      alert('Fehler beim Speichern: ' + e.message)
-    }
-  }
-
-  const handleCancelChannelEdit = () => {
-    setEditingChannel(null)
-    setEditChannelName('')
-    setEditChannelModelId('')
-  }
-
-  // Conversation CRUD
   const handleNewConvo = async () => {
     const convo = await channel.createConversation(newTitle, selectedChannel)
     setNewTitle('')
@@ -134,206 +155,176 @@ export default function Channel({ projectId, onUpdate }) {
     setSelected(convo.id)
   }
 
+  const handleDeleteConvo = async (id) => {
+    if (!confirm('Unterhaltung löschen?')) return
+    await channel.deleteConversation(id)
+    if (selected === id) { setSelected(null); setMessages([]) }
+    await loadConvos()
+  }
+
+  const handleDeleteMsg = async (id) => {
+    await channel.deleteMessage(id)
+    if (selected) loadMessages(selected)
+  }
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (file) setSelectedFile(file)
+  }
+
   const handleSend = async (e) => {
     e.preventDefault()
     if ((!text.trim() && !selectedFile) || !selected || sending) return
     setSending(true)
-    
     try {
-      // Send message first
-      const response = await channel.sendMessage(selected, 'user', text || 'Datei gesendet', taskRef || undefined)
-      
-      // If there's a file and we got a message ID, upload the attachment
-      if (selectedFile && response?.id) {
-        await attachments.upload(selectedFile, 'message', response.id)
+      if (selectedFile) {
+        setUploading(true)
+        const formData = new FormData()
+        formData.append('file', selectedFile)
+        formData.append('conversation_id', selected)
+        if (text.trim()) formData.append('text', text.trim())
+        if (taskRef.trim()) formData.append('task_ref', taskRef.trim())
+        await attachments.upload(formData)
+        setUploading(false)
+        setSelectedFile(null)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      } else {
+        await channel.sendMessage(selected, text.trim(), taskRef || null)
       }
-      
       setText('')
       setTaskRef('')
-      setSelectedFile(null)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-      
       await loadMessages(selected)
-      // For model channels, wait then reload to get AI response
-      if (currentChannel?.type === 'model') {
-        setTimeout(async () => {
-          await loadMessages(selected)
-          setSending(false)
-        }, 500)
-      } else {
-        setSending(false)
-      }
-      loadConvos()
-      onUpdate?.()
-    } catch (error) {
-      setSending(false)
-      alert('Fehler beim Senden: ' + error.message)
+    } catch (err) {
+      alert('Fehler: ' + err.message)
     }
+    setSending(false)
   }
 
-  const handleFileSelect = (event) => {
-    const file = event.target.files[0]
-    if (file) {
-      setSelectedFile(file)
-    }
-  }
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  }
-
-  const handleDeleteConvo = async (id) => {
-    if (!confirm('Unterhaltung löschen? Alle Nachrichten gehen verloren.')) return
-    await channel.deleteConversation(id)
-    if (selected === id) { setSelected(null); setMessages([]) }
-    loadConvos()
-    onUpdate?.()
-  }
-
-  const handleEditMsg = async (msg) => {
-    setEditMsg(msg)
-    setEditText(msg.text)
-  }
-
+  const handleEditMsg = async (msg) => { setEditMsg(msg); setEditText(msg.text) }
   const handleSaveEdit = async () => {
     if (!editMsg || !editText.trim()) return
     await channel.editMessage(editMsg.id, editText)
-    setEditMsg(null)
-    setEditText('')
-    loadMessages(selected)
-  }
-
-  const handleDeleteMsg = async (msgId) => {
-    if (!confirm('Nachricht löschen?')) return
-    await channel.deleteMessage(msgId)
-    loadMessages(selected)
+    setEditMsg(null); setEditText('')
+    if (selected) loadMessages(selected)
   }
 
   const handleCreateTaskFromMessage = (message) => {
-    const lines = message.text.split('\n')
+    const lines = message.text.split('\n').filter(l => l.trim())
     const firstLine = lines[0] || message.text
-    const title = firstLine.length > 60 ? firstLine.substring(0, 60) + '...' : firstLine
-    
-    setTaskTitle(title)
+    setTaskTitle(firstLine.length > 60 ? firstLine.substring(0, 60) + '...' : firstLine)
     setTaskFromMessage(message.text)
     setShowCreateTask(true)
   }
 
-  const handleTaskSave = () => {
-    setShowCreateTask(false)
-    setTaskFromMessage('')
-    setTaskTitle('')
-  }
+  // Which agent IDs are already linked to a channel
+  const linkedAgentIds = channels.map(c => c.model_id).filter(Boolean)
+  const unlinkedAgents = ocAgents.filter(a => !linkedAgentIds.includes(a.id) && !linkedAgentIds.includes(a.id.replace(/^agent:/, '')))
 
   return (
     <div>
-      {/* Channel selector bar */}
+      {/* Agent selector bar */}
       <div className="bg-gray-900 rounded-xl border border-gray-800 px-4 py-3 mb-4">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 mb-3">
-          <div className="flex items-center gap-3 flex-1">
-            <button 
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="md:hidden p-2 text-gray-400 hover:text-white transition-colors"
-              title="Conversations toggle"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
             </button>
-            <span className="text-lg">💬</span>
             <span className="text-sm font-semibold text-gray-300">Agents</span>
-            {currentChannel?.model_id && (
-              <span className="hidden md:inline text-[10px] bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full">{currentChannel.model_id}</span>
-            )}
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowChannelModal(true)}
-              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">+ Channel</button>
+          <div className="flex gap-2">
+            <button onClick={() => { loadOcAgents() }} title="Aktualisieren"
+              className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs transition-colors">
+              {loadingAgents ? '⏳' : '↻'}
+            </button>
+            <button onClick={() => setShowAddModal(true)}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium transition-colors">
+              + Agent
+            </button>
             {selectedChannel && currentChannel && !currentChannel.is_default && (
               <button onClick={handleDeleteChannel}
-                className="px-3 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-xs transition-colors">🗑️ Löschen</button>
+                className="px-3 py-2 bg-gray-700 hover:bg-red-600 rounded-lg text-xs transition-colors">
+                🗑️
+              </button>
             )}
           </div>
         </div>
-        
-        {/* Channel Dropdown Selector */}
-        <div className="flex items-center gap-2">
-          {editingChannel ? (
-            <div className="flex flex-col gap-2 flex-1">
-              <div className="flex items-center gap-2">
-                <input
-                  value={editChannelName}
-                  onChange={e => setEditChannelName(e.target.value)}
-                  placeholder="Channel-Name"
-                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500"
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') handleSaveChannelEdit()
-                    if (e.key === 'Escape') handleCancelChannelEdit()
-                  }}
-                  autoFocus
-                />
-                <button onClick={handleSaveChannelEdit} className="text-emerald-400 hover:text-emerald-300 text-sm px-2" title="Speichern">✓</button>
-                <button onClick={handleCancelChannelEdit} className="text-gray-400 hover:text-gray-300 text-sm px-2" title="Abbrechen">✕</button>
-              </div>
-              <input
-                value={editChannelModelId}
-                onChange={e => setEditChannelModelId(e.target.value)}
-                placeholder="Agent-ID oder Modell (z.B. agent:video, main)"
-                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleSaveChannelEdit()
-                  if (e.key === 'Escape') handleCancelChannelEdit()
-                }}
-              />
-            </div>
-          ) : (
-            <>
-              <select
-                value={selectedChannel || ''}
-                onChange={e => setSelectedChannel(Number(e.target.value))}
-                className="flex-1 max-w-xs px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer"
+
+        {/* Agent pills */}
+        <div className="flex flex-wrap gap-2">
+          {/* Existing channels */}
+          {channels.map(ch => {
+            const label = ch.model_id ? ch.model_id.replace(/^(agent:|openclaw:)/, '') : ch.name
+            const isSelected = selectedChannel === ch.id
+            return (
+              <button
+                key={ch.id}
+                onClick={() => setSelectedChannel(ch.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+                  isSelected
+                    ? 'bg-teal-600 border-teal-500 text-white'
+                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-teal-600 hover:text-white'
+                }`}
               >
-                {channels.map(ch => (
-                  <option key={ch.id} value={ch.id}>
-                    {ch.type === 'model' ? '🤖' : '🐢'} {ch.name}
-                  </option>
-                ))}
-              </select>
-              {currentChannel && !currentChannel.is_default && (
-                <button onClick={() => handleEditChannel(currentChannel)} className="text-gray-400 hover:text-blue-400 text-sm px-2" title="Bearbeiten">✏️</button>
-              )}
-            </>
+                <span>{ch.is_default ? '🐢' : '🎬'}</span>
+                <span>{ch.name}</span>
+                {!ch.is_default && <span className="text-[9px] opacity-60 ml-1">{label}</span>}
+              </button>
+            )
+          })}
+
+          {/* Unlinked OpenClaw agents — quick-add */}
+          {unlinkedAgents.map(a => (
+            <button
+              key={a.id}
+              onClick={() => handleSelectAgent(a)}
+              title={`Agent ${a.id} hinzufügen`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border border-dashed border-gray-600 text-gray-500 hover:border-teal-500 hover:text-teal-300"
+            >
+              <span>＋</span>
+              <span>{a.name}</span>
+            </button>
+          ))}
+
+          {!loadingAgents && ocAgents.length === 0 && channels.length === 0 && (
+            <span className="text-xs text-gray-500">Keine Agents gefunden. Gateway erreichbar?</span>
           )}
         </div>
-        
-        {currentChannel?.model_id && (
-          <span className="md:hidden text-[10px] bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full text-center mt-2 inline-block">{currentChannel.model_id}</span>
-        )}
       </div>
 
-      {/* Channel creation modal */}
-      {showChannelModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 md:p-0" onClick={() => setShowChannelModal(false)}>
-          <div className="bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-700 w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Neuer Agent</h3>
-            <input value={newChName} onChange={e => setNewChName(e.target.value)} placeholder="Channel Name"
-              className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500" autoFocus />
-            <select value={newChModelId} onChange={e => setNewChModelId(e.target.value)}
-              className="w-full mb-4 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-emerald-500">
-              <option value="">Modell wählen...</option>
-              {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
+      {/* Add Agent Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3" onClick={() => setShowAddModal(false)}>
+          <div className="bg-gray-900 p-5 rounded-xl border border-gray-700 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold mb-4">Agent hinzufügen</h3>
+            <input
+              value={addAgentId}
+              onChange={e => setAddAgentId(e.target.value)}
+              placeholder="Agent-ID (z.B. video, main)"
+              className="w-full mb-3 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-teal-500"
+              autoFocus
+              onKeyDown={e => e.key === 'Enter' && handleAddManual()}
+            />
+            <input
+              value={addAgentName}
+              onChange={e => setAddAgentName(e.target.value)}
+              placeholder="Anzeigename (optional)"
+              className="w-full mb-4 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-teal-500"
+              onKeyDown={e => e.key === 'Enter' && handleAddManual()}
+            />
             <div className="flex gap-2">
-              <button onClick={handleCreateChannel} disabled={!newChName.trim() || !newChModelId}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">Erstellen</button>
-              <button onClick={() => setShowChannelModal(false)}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Abbrechen</button>
+              <button onClick={handleAddManual} disabled={!addAgentId.trim()}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+                Hinzufügen
+              </button>
+              <button onClick={() => setShowAddModal(false)}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">
+                Abbrechen
+              </button>
             </div>
           </div>
         </div>
@@ -341,12 +332,15 @@ export default function Channel({ projectId, onUpdate }) {
 
       {/* Main chat layout */}
       {selectedChannel && (
-        <div className="flex gap-4 relative" style={{ height: 'calc(100vh - 180px)' }}>
+        <div className="flex gap-4 relative" style={{ height: 'calc(100vh - 220px)' }}>
           {/* Desktop Sidebar */}
-          <div className="hidden md:flex w-72 shrink-0 bg-gray-900 rounded-xl border border-gray-800 flex-col overflow-hidden">
+          <div className="hidden md:flex w-64 shrink-0 bg-gray-900 rounded-xl border border-gray-800 flex-col overflow-hidden">
             <div className="p-3 border-b border-gray-800 flex items-center justify-between">
-              <span className="text-sm font-semibold text-gray-300">Unterhaltungen</span>
-              <button onClick={() => setShowNew(!showNew)} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium transition-colors">+ Neu</button>
+              <span className="text-xs font-semibold text-gray-300 truncate">{currentChannel?.name}</span>
+              <button onClick={() => setShowNew(!showNew)}
+                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium transition-colors shrink-0">
+                + Neu
+              </button>
             </div>
             {showNew && (
               <div className="p-3 border-b border-gray-800 flex gap-2">
@@ -376,11 +370,11 @@ export default function Channel({ projectId, onUpdate }) {
           {/* Mobile Sidebar Overlay */}
           {sidebarOpen && (
             <div className="fixed inset-0 bg-black/60 z-50 md:hidden" onClick={() => setSidebarOpen(false)}>
-              <div className="absolute top-0 left-0 w-80 max-w-[90vw] h-full bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="absolute top-0 left-0 w-80 max-w-[90vw] h-full bg-gray-900 border-r border-gray-800 flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="p-3 border-b border-gray-800 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-300">Unterhaltungen</span>
+                  <span className="text-sm font-semibold text-gray-300">{currentChannel?.name}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => setShowNew(!showNew)} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium transition-colors">+ Neu</button>
+                    <button onClick={() => setShowNew(!showNew)} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-medium">+ Neu</button>
                     <button onClick={() => setSidebarOpen(false)} className="text-gray-400 hover:text-white">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -393,20 +387,20 @@ export default function Channel({ projectId, onUpdate }) {
                     <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Titel (optional)"
                       className="flex-1 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white focus:outline-none focus:border-emerald-500"
                       onKeyDown={e => e.key === 'Enter' && handleNewConvo()} />
-                    <button onClick={handleNewConvo} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs transition-colors">OK</button>
+                    <button onClick={handleNewConvo} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs">OK</button>
                   </div>
                 )}
                 <div className="flex-1 overflow-y-auto">
                   {convos.map(c => (
-                    <div key={c.id} onClick={() => { setSelected(c.id); setSidebarOpen(false); }}
-                      className={`px-3 py-2 cursor-pointer border-b border-gray-800/50 flex items-center gap-2 hover:bg-gray-800/50 transition-colors group ${selected === c.id ? 'bg-gray-800' : ''}`}>
+                    <div key={c.id} onClick={() => { setSelected(c.id); setSidebarOpen(false) }}
+                      className={`px-3 py-2 cursor-pointer border-b border-gray-800/50 flex items-center gap-2 hover:bg-gray-800/50 group ${selected === c.id ? 'bg-gray-800' : ''}`}>
                       {c.has_unanswered === 1 && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
                       <div className="flex-1 min-w-0">
                         <div className="text-xs text-white truncate">{c.title}</div>
                         <div className="text-[10px] text-gray-500">{new Date(c.created_at + 'Z').toLocaleString('de-DE')}</div>
                       </div>
                       <button onClick={(e) => { e.stopPropagation(); handleDeleteConvo(c.id) }}
-                        className="text-gray-600 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">🗑️</button>
+                        className="text-gray-600 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100">🗑️</button>
                     </div>
                   ))}
                   {convos.length === 0 && <p className="text-gray-500 text-center py-6 text-xs">Keine Unterhaltungen</p>}
@@ -420,8 +414,13 @@ export default function Channel({ projectId, onUpdate }) {
             {selected ? (
               <>
                 <div className="p-3 border-b border-gray-800 flex items-center gap-2">
-                  <span className="text-sm">{currentChannel?.type === 'model' ? '🤖' : '🐢'}</span>
+                  <span className="text-sm">🐢</span>
                   <h3 className="text-sm font-semibold text-gray-300 truncate flex-1">{convos.find(c => c.id === selected)?.title}</h3>
+                  {currentChannel?.model_id && (
+                    <span className="text-[10px] bg-teal-900/50 text-teal-300 px-2 py-0.5 rounded-full">
+                      {currentChannel.model_id.replace(/^agent:/, '')}
+                    </span>
+                  )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                   {messages.map(m => (
@@ -429,7 +428,7 @@ export default function Channel({ projectId, onUpdate }) {
                       <div className={`max-w-[75%] px-3 py-2 rounded-xl text-sm group relative ${m.author === 'user' ? 'bg-emerald-700/40 text-emerald-100' : 'bg-gray-800 text-gray-200'}`}>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-[10px] font-semibold uppercase tracking-wide opacity-60">
-                            {m.author === 'user' ? '👤 Mensch' : (currentChannel?.type === 'model' ? '🤖 KI' : '🐢 Agent')}
+                            {m.author === 'user' ? '👤 Du' : '🐢 Agent'}
                           </span>
                           {m.task_ref && <span className="text-[10px] bg-yellow-900/50 text-yellow-300 px-1.5 rounded">Task #{m.task_ref}</span>}
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
@@ -440,7 +439,6 @@ export default function Channel({ projectId, onUpdate }) {
                             <button onClick={() => handleDeleteMsg(m.id)} className="text-gray-400 hover:text-red-400 text-[10px]">🗑️</button>
                           </div>
                         </div>
-
                         {editMsg?.id === m.id ? (
                           <div className="space-y-2">
                             <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={3}
@@ -453,7 +451,6 @@ export default function Channel({ projectId, onUpdate }) {
                         ) : (
                           <p className="whitespace-pre-wrap">{m.text}</p>
                         )}
-
                         <div className="text-[10px] text-gray-500 mt-1">{new Date(m.created_at + 'Z').toLocaleString('de-DE')}</div>
                       </div>
                     </div>
@@ -462,47 +459,23 @@ export default function Channel({ projectId, onUpdate }) {
                   {messages.length === 0 && <p className="text-gray-500 text-center py-10 text-sm">Noch keine Nachrichten</p>}
                 </div>
                 <form onSubmit={handleSend} className="p-3 border-t border-gray-800 space-y-2">
-                  {/* File Selection Display */}
                   {selectedFile && (
                     <div className="flex items-center gap-2 p-2 bg-gray-800 rounded-lg text-xs">
                       <span className="text-gray-400">📄</span>
                       <span className="flex-1 truncate">{selectedFile.name}</span>
                       <span className="text-gray-500">({formatFileSize(selectedFile.size)})</span>
-                      <button 
-                        type="button"
-                        onClick={() => {setSelectedFile(null); fileInputRef.current.value = ''}}
-                        className="text-red-400 hover:text-red-300 px-1"
-                      >
-                        ✕
-                      </button>
+                      <button type="button" onClick={() => { setSelectedFile(null); fileInputRef.current.value = '' }} className="text-red-400 hover:text-red-300 px-1">✕</button>
                     </div>
                   )}
-                  
-                  {/* Input Area */}
                   <div className="flex flex-col md:flex-row gap-2">
                     <div className="flex gap-2 flex-1">
-                      {currentChannel?.type === 'agent' && (
-                        <input value={taskRef} onChange={e => setTaskRef(e.target.value)} placeholder="Task #"
-                          className="w-16 px-2 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs text-white focus:outline-none focus:border-yellow-500" />
-                      )}
+                      <input value={taskRef} onChange={e => setTaskRef(e.target.value)} placeholder="Task #"
+                        className="w-16 px-2 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs text-white focus:outline-none focus:border-yellow-500" />
                       <input value={text} onChange={e => setText(e.target.value)} placeholder="Nachricht schreiben..."
                         className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500" />
-                      
-                      {/* File Upload Button */}
-                      <input 
-                        type="file" 
-                        ref={fileInputRef}
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
-                      <button 
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors"
-                        title="Datei anhängen"
-                      >
-                        📎
-                      </button>
+                      <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
+                      <button type="button" onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors" title="Datei anhängen">📎</button>
                     </div>
                     <button type="submit" disabled={sending}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
@@ -512,23 +485,28 @@ export default function Channel({ projectId, onUpdate }) {
                 </form>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
-                Wähle eine Unterhaltung oder erstelle eine neue
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-500 text-sm p-6 text-center">
+                <span className="text-3xl">🐢</span>
+                <p>Wähle einen Agent und starte eine Unterhaltung</p>
+                {convos.length === 0 && (
+                  <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium text-white transition-colors">
+                    + Neue Unterhaltung
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* CardModal for creating tasks from messages */}
-      <CardModal 
+      <CardModal
         isOpen={showCreateTask}
         onClose={() => setShowCreateTask(false)}
         mode="create"
         defaultColumnName="backlog"
         defaultTitle={taskTitle}
         defaultDescription={taskFromMessage}
-        onSave={handleTaskSave}
+        onSave={() => { setShowCreateTask(false); setTaskFromMessage(''); setTaskTitle('') }}
       />
     </div>
   )
