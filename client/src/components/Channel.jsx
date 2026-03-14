@@ -26,6 +26,7 @@ export default function Channel({ projectId, onUpdate }) {
   // Channel editing
   const [editingChannel, setEditingChannel] = useState(null)
   const [editChannelName, setEditChannelName] = useState('')
+  const [editChannelModelId, setEditChannelModelId] = useState('')
   // CardModal for creating tasks from messages
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [taskFromMessage, setTaskFromMessage] = useState('')
@@ -102,23 +103,26 @@ export default function Channel({ projectId, onUpdate }) {
   const handleEditChannel = (channel) => {
     setEditingChannel(channel.id)
     setEditChannelName(channel.name)
+    setEditChannelModelId(channel.model_id || '')
   }
 
   const handleSaveChannelEdit = async () => {
     if (!editChannelName.trim() || !editingChannel) return
     try {
-      await chatChannels.update(editingChannel, { name: editChannelName })
+      await chatChannels.update(editingChannel, { name: editChannelName, model_id: editChannelModelId })
       setEditingChannel(null)
       setEditChannelName('')
+      setEditChannelModelId('')
       await loadChannels()
     } catch (e) {
-      alert('Fehler beim Umbenennen: ' + e.message)
+      alert('Fehler beim Speichern: ' + e.message)
     }
   }
 
   const handleCancelChannelEdit = () => {
     setEditingChannel(null)
     setEditChannelName('')
+    setEditChannelModelId('')
   }
 
   // Conversation CRUD
@@ -261,19 +265,32 @@ export default function Channel({ projectId, onUpdate }) {
         {/* Channel Dropdown Selector */}
         <div className="flex items-center gap-2">
           {editingChannel ? (
-            <div className="flex items-center gap-2 flex-1">
+            <div className="flex flex-col gap-2 flex-1">
+              <div className="flex items-center gap-2">
+                <input
+                  value={editChannelName}
+                  onChange={e => setEditChannelName(e.target.value)}
+                  placeholder="Channel-Name"
+                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleSaveChannelEdit()
+                    if (e.key === 'Escape') handleCancelChannelEdit()
+                  }}
+                  autoFocus
+                />
+                <button onClick={handleSaveChannelEdit} className="text-emerald-400 hover:text-emerald-300 text-sm px-2" title="Speichern">✓</button>
+                <button onClick={handleCancelChannelEdit} className="text-gray-400 hover:text-gray-300 text-sm px-2" title="Abbrechen">✕</button>
+              </div>
               <input
-                value={editChannelName}
-                onChange={e => setEditChannelName(e.target.value)}
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-emerald-500"
+                value={editChannelModelId}
+                onChange={e => setEditChannelModelId(e.target.value)}
+                placeholder="Agent-ID oder Modell (z.B. agent:video, main)"
+                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
                 onKeyDown={e => {
                   if (e.key === 'Enter') handleSaveChannelEdit()
                   if (e.key === 'Escape') handleCancelChannelEdit()
                 }}
-                autoFocus
               />
-              <button onClick={handleSaveChannelEdit} className="text-emerald-400 hover:text-emerald-300 text-sm px-2" title="Speichern">✓</button>
-              <button onClick={handleCancelChannelEdit} className="text-gray-400 hover:text-gray-300 text-sm px-2" title="Abbrechen">✕</button>
             </div>
           ) : (
             <>
@@ -288,8 +305,8 @@ export default function Channel({ projectId, onUpdate }) {
                   </option>
                 ))}
               </select>
-              {currentChannel && !currentChannel.is_default && currentChannel.type !== 'agent' && (
-                <button onClick={() => handleEditChannel(currentChannel)} className="text-gray-400 hover:text-blue-400 text-sm px-2" title="Umbenennen">✏️</button>
+              {currentChannel && !currentChannel.is_default && (
+                <button onClick={() => handleEditChannel(currentChannel)} className="text-gray-400 hover:text-blue-400 text-sm px-2" title="Bearbeiten">✏️</button>
               )}
             </>
           )}
