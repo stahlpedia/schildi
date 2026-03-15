@@ -189,7 +189,7 @@ export default function Channel({ projectId, onUpdate }) {
         setSelectedFile(null)
         if (fileInputRef.current) fileInputRef.current.value = ''
       } else {
-        await channel.sendMessage(selected, text.trim(), taskRef || null)
+        await channel.sendMessage(selected, 'user', text.trim(), taskRef || null)
       }
       setText('')
       setTaskRef('')
