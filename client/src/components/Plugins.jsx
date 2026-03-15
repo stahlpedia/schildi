@@ -29,7 +29,7 @@ const PLUGINS = [
 
 export default function Plugins() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 overflow-y-auto h-full pr-1">
       <div className="bg-gray-900 rounded-xl border border-gray-800 p-4 md:p-5">
         <h2 className="text-lg font-semibold text-white mb-2">Plugins</h2>
         <p className="text-sm text-gray-400">

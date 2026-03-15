@@ -119,7 +119,7 @@ export default function WorkspaceBrowser() {
       {error && <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
       <div className="flex gap-4 flex-1 min-h-0">
-        <div className="flex-1 bg-gray-900 rounded-xl border border-gray-800 flex flex-col overflow-hidden">
+        <div className={`bg-gray-900 rounded-xl border border-gray-800 flex flex-col overflow-hidden ${selectedEntry && !selectedEntry.isDirectory ? 'hidden md:flex md:flex-1' : 'flex-1'}`}>
           {loading ? (
             <div className="flex-1 flex items-center justify-center text-gray-500">Lade...</div>
           ) : (
@@ -152,10 +152,17 @@ export default function WorkspaceBrowser() {
         </div>
 
         {selectedEntry && !selectedEntry.isDirectory && (
-          <div className="hidden md:flex w-96 bg-gray-900 rounded-xl border border-gray-800 flex-col overflow-hidden">
-            <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white truncate">{selectedEntry.name}</h3>
-              <button onClick={() => { setSelectedEntry(null); setPreviewContent(null) }} className="text-gray-400 hover:text-white text-sm">✕</button>
+          <div className="flex flex-1 md:flex-none md:w-96 bg-gray-900 rounded-xl border border-gray-800 flex-col overflow-hidden">
+            <div className="p-4 border-b border-gray-800 flex items-center gap-3 justify-between">
+              <button onClick={() => { setSelectedEntry(null); setPreviewContent(null) }}
+                className="md:hidden flex items-center gap-2 text-gray-400 hover:text-white text-sm shrink-0">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Zurück
+              </button>
+              <h3 className="text-sm font-semibold text-white truncate flex-1">{selectedEntry.name}</h3>
+              <button onClick={() => { setSelectedEntry(null); setPreviewContent(null) }} className="hidden md:block text-gray-400 hover:text-white text-sm">✕</button>
             </div>
             <div className="flex-1 overflow-y-auto flex items-center justify-center bg-gray-800/50">
               {isImage(selectedEntry.name) ? (
