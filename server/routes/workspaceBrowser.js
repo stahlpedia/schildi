@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { authenticate } = require('../auth');
 
-const WORKSPACE_DIR = process.env.WORKSPACE_PATH || '/home/node/.openclaw/workspace';
+const WORKSPACE_DIR = process.env.WORKSPACE_PATH || '/home/node/.openclaw';
 
 router.use(authenticate);
 

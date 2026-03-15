@@ -8,7 +8,7 @@ services:
       - DASHBOARD_USER=thomas
       - DASHBOARD_PASSWORD=changeme
       - JWT_SECRET=change-this-to-a-random-string
-      - WORKSPACE_PATH=/workspace
+      - WORKSPACE_PATH=/home/node/.openclaw
       - MEDIA_DIR=/media
     volumes:
       - ./data:/app/data

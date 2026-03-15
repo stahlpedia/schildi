@@ -92,7 +92,7 @@ export default function WorkspaceBrowser() {
   const fileUrl = (entryPath) => API_BASE + '/file?path=' + encodeURIComponent(entryPath) + '&token=' + getToken()
 
   const pathParts = currentPath ? currentPath.split('/') : []
-  const breadcrumbs = [{ label: 'Workspace', path: '' }]
+  const breadcrumbs = [{ label: 'OpenClaw', path: '' }]
   pathParts.forEach((part, i) => {
     breadcrumbs.push({ label: part, path: pathParts.slice(0, i + 1).join('/') })
   })
